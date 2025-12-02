@@ -25,6 +25,7 @@ export interface User {
   role: UserRole;
   isVerified: boolean;
   joinedAt: string;
+  savedProjectIds?: string[];
 }
 
 export enum ProjectStatus {

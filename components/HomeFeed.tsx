@@ -1,27 +1,48 @@
-import React, { useState } from 'react';
-import { api } from '../services/mockStore';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { User, Project, Insight } from '../types';
-import { MessageSquare, Share2, Users, MapPin } from 'lucide-react';
+import { MessageSquare, Share2, Users, MapPin, Loader } from 'lucide-react';
 
 interface HomeFeedProps {
   user: User;
-  onViewProject: () => void; // Simple navigation helper
+  onViewProject: () => void;
 }
 
 const HomeFeed: React.FC<HomeFeedProps> = ({ user, onViewProject }) => {
-  const [projects] = useState<Project[]>(api.projects.getAll().filter(p => p.status === 'Shared'));
-  const [insights] = useState<Insight[]>(api.insights.getAll().filter(i => i.status === 'Shared'));
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
-  // Merge and sort by creation date (mock logic)
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const allProjects = await api.projects.getAll();
+            const allInsights = await api.insights.getAll();
+            setProjects(allProjects.filter(p => p.status === 'Shared'));
+            setInsights(allInsights.filter(i => i.status === 'Shared'));
+            
+            // Prefetch user names for feed
+            const allUsers = await api.users.getAll();
+            const uMap: Record<string, string> = {};
+            allUsers.forEach(u => uMap[u.id] = `${u.name} (${u.stakeholderType})`);
+            setUsersMap(uMap);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchData();
+  }, []);
+
+  const getUserName = (id: string) => usersMap[id] || 'Unknown User';
+
+  // Merge and sort
   const feedItems = [
     ...projects.map(p => ({ type: 'project', data: p, date: p.createdAt })),
     ...insights.map(i => ({ type: 'insight', data: i, date: i.createdAt }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const getUserName = (id: string) => {
-    const u = api.users.getById(id);
-    return u ? `${u.name} (${u.stakeholderType})` : 'Unknown User';
-  };
+  if (loading) return <div className="flex justify-center p-10 text-gray-400"><Loader className="animate-spin mr-2"/> Loading feed...</div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -31,6 +52,8 @@ const HomeFeed: React.FC<HomeFeedProps> = ({ user, onViewProject }) => {
             <h2 className="text-xl font-bold text-gray-800">Your Feed</h2>
             <div className="text-sm text-gray-500">Latest Updates</div>
         </div>
+
+        {feedItems.length === 0 && <div className="text-center py-10 text-gray-500">No recent activity.</div>}
 
         {feedItems.map((item, idx) => {
           if (item.type === 'project') {

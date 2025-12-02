@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { api } from '../services/mockStore';
+import { api } from '../services/api';
 import { User, StakeholderType, UserRole } from '../types';
 import { THEMATIC_AREAS, COUNTRIES, INDIVIDUAL_SUBTYPES, ORGANIZATION_SUBTYPES, GROUP_SUBTYPES } from '../constants';
-import { Mail, Lock, User as UserIcon, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ArrowRight, ArrowLeft, CheckCircle, Loader } from 'lucide-react';
 
 interface AuthFlowProps {
   onLogin: (user: User) => void;
@@ -21,20 +21,24 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Login Handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = api.users.login(email, password);
-    if (user) {
-      if (!user.isVerified) {
-        // In a real app, resend OTP and go to OTP screen
-        setError("Account not verified. Please verify your email.");
-        return;
-      }
-      onLogin(user);
-    } else {
-      setError("Invalid email or password");
+    setError('');
+    setIsLoading(true);
+    try {
+        const user = await api.users.login(email, password);
+        if (user) {
+            onLogin(user);
+        } else {
+            setError("Login failed. Please check your credentials.");
+        }
+    } catch (err: any) {
+        setError(err.message || "Login failed");
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -45,33 +49,29 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
     setError('');
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Basic validation
     if (!formData.name || !email || !password) {
       setError("Please fill in all required fields");
       return;
     }
     
-    // Check if email exists
-    const users = api.users.getAll();
-    if (users.find(u => u.email === email)) {
-      setError("Email already registered");
-      return;
-    }
-
-    // Move to OTP
+    // We skip the redundant "getAll()" check here because Firebase handles uniqueness securely on create.
     setStep('otp');
     setError('');
   };
 
-  const handleOtpVerify = (e: React.FormEvent) => {
+  const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp === '123456') { // Mock OTP
+    setIsLoading(true);
+    
+    // In this app, we simulate the OTP check on the client side, then proceed to real Firebase creation
+    if (otp === '123456') { 
       const newUser: User = {
+        // ID will be overwritten by Firebase Service using the Auth UID
         id: `u${Date.now()}`,
         email: email,
-        passwordHash: password,
+        passwordHash: password, // Passed to service to create Auth account, then removed before DB save
         name: formData.name || '',
         stakeholderType: formData.stakeholderType!,
         subtype: formData.subtype,
@@ -84,11 +84,21 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
         ...formData
       } as User;
       
-      api.users.create(newUser);
-      onLogin(newUser);
+      try {
+         // This creates the Auth user AND saves the profile to Firestore
+         const createdUser = await api.users.create(newUser);
+         onLogin(createdUser);
+      } catch (err: any) {
+          setError(err.message);
+          // If email exists, we might want to go back
+          if (err.message.includes("already registered")) {
+              setTimeout(() => setStep('register-form'), 2000);
+          }
+      }
     } else {
       setError("Invalid OTP code. Try 123456.");
     }
+    setIsLoading(false);
   };
 
   const SubtypeOptions = () => {
@@ -168,9 +178,10 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
               </div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                Log In
+                {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : "Log In"}
               </button>
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-600">
@@ -215,13 +226,12 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
 
           {/* Registration Form */}
           {step === 'register-form' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+            <form onSubmit={handleRegisterSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               <button type="button" onClick={() => setStep('select-type')} className="text-sm text-gray-500 hover:text-gray-700 flex items-center mb-2">
                 <ArrowLeft className="w-4 h-4 mr-1" /> Back
               </button>
               <h2 className="text-lg font-semibold text-gray-800">Sign Up as {formData.stakeholderType}</h2>
               
-              {/* Removed max-h-60 overflow-y-auto to allow full scrolling */}
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700">Subtype</label>
@@ -262,7 +272,6 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
                   </div>
                 </div>
                 
-                {/* Checkbox List for Focus Areas */}
                 <div>
                    <label className="block text-xs font-medium text-gray-700 mb-2">Focus Areas (Select all that apply)</label>
                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded p-2">
@@ -311,9 +320,10 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
 
               <button
                 type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none disabled:opacity-50"
               >
-                Create Account
+                {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : "Create Account"}
               </button>
             </form>
           )}
@@ -341,9 +351,10 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onLogin }) => {
                 />
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                  disabled={isLoading}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
-                  Verify Code
+                   {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : "Verify Code"}
                 </button>
               </form>
               

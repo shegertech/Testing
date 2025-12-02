@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Mail, MessageCircle, FileQuestion } from 'lucide-react';
+import { HelpCircle, Mail, MessageCircle, FileQuestion, MapPin, Phone, FileText, CheckCircle, Shield } from 'lucide-react';
 
 export const AboutView: React.FC = () => (
   <div className="max-w-4xl mx-auto bg-white p-10 rounded-xl shadow-sm border border-gray-200 animate-fade-in">
@@ -137,7 +137,128 @@ export const TermsView: React.FC = () => (
   </div>
 );
 
-export const HelpView: React.FC = () => {
+export const ContactView: React.FC = () => (
+  <div className="max-w-4xl mx-auto bg-white p-10 rounded-xl shadow-sm border border-gray-200">
+    <div className="grid md:grid-cols-2 gap-10">
+      <div>
+         <h1 className="text-3xl font-bold text-gray-900 mb-6">Contact Us</h1>
+         <p className="text-gray-600 mb-8">
+           We'd love to hear from you. Whether you have a question about features, trials, pricing, or need a demo, our team is ready to answer all your questions.
+         </p>
+         
+         <div className="space-y-6">
+            <div className="flex items-start space-x-4">
+               <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
+                 <MapPin className="w-6 h-6" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-gray-900">Our Office</h3>
+                 <p className="text-gray-600 text-sm">Addis Ababa, Ethiopia</p>
+                 <p className="text-gray-600 text-sm">Bole Sub-city, Woreda 03</p>
+               </div>
+            </div>
+            
+            <div className="flex items-start space-x-4">
+               <div className="bg-green-100 p-3 rounded-lg text-green-600">
+                 <Mail className="w-6 h-6" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-gray-900">Email Us</h3>
+                 <p className="text-gray-600 text-sm">support@ponsectors.com</p>
+                 <p className="text-gray-600 text-sm">partners@ponsectors.com</p>
+               </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+               <div className="bg-purple-100 p-3 rounded-lg text-purple-600">
+                 <Phone className="w-6 h-6" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-gray-900">Call Us</h3>
+                 <p className="text-gray-600 text-sm">+251 911 234 567</p>
+                 <p className="text-gray-500 text-xs">Mon-Fri from 8am to 5pm EAT</p>
+               </div>
+            </div>
+         </div>
+      </div>
+      
+      <div className="bg-gray-50 p-8 rounded-xl border border-gray-100">
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Message sent!'); }}>
+           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+             <input type="text" className="w-full border border-gray-300 rounded-md p-2" placeholder="John Doe" />
+           </div>
+           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+             <input type="email" className="w-full border border-gray-300 rounded-md p-2" placeholder="john@example.com" />
+           </div>
+           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+             <textarea rows={4} className="w-full border border-gray-300 rounded-md p-2" placeholder="How can we help?" />
+           </div>
+           <button type="submit" className="w-full bg-blue-600 text-white font-bold py-2 rounded-md hover:bg-blue-700 transition">
+             Send Message
+           </button>
+        </form>
+      </div>
+    </div>
+  </div>
+);
+
+export const GuidelinesView: React.FC = () => (
+  <div className="max-w-4xl mx-auto bg-white p-10 rounded-xl shadow-sm border border-gray-200">
+     <div className="text-center mb-10">
+      <h1 className="text-3xl font-bold text-gray-900 mb-4">Community Guidelines</h1>
+      <p className="text-gray-600 max-w-2xl mx-auto">
+        Ponsectors is a professional community dedicated to social impact. To maintain a safe and productive environment, we ask all members to adhere to these guidelines.
+      </p>
+    </div>
+
+    <div className="grid gap-6 md:grid-cols-2">
+       <div className="p-6 border border-green-200 bg-green-50 rounded-lg">
+          <h3 className="font-bold text-green-800 mb-3 flex items-center">
+            <CheckCircle className="w-5 h-5 mr-2" /> Do's
+          </h3>
+          <ul className="space-y-2 text-sm text-gray-700">
+             <li>• Be respectful and constructive in your feedback.</li>
+             <li>• Share accurate and verifiable information.</li>
+             <li>• Respect intellectual property and credit sources.</li>
+             <li>• Report suspicious activity or harassment.</li>
+             <li>• Use your real identity and professional affiliation.</li>
+          </ul>
+       </div>
+       
+       <div className="p-6 border border-red-200 bg-red-50 rounded-lg">
+          <h3 className="font-bold text-red-800 mb-3 flex items-center">
+            <Shield className="w-5 h-5 mr-2" /> Dont's
+          </h3>
+          <ul className="space-y-2 text-sm text-gray-700">
+             <li>• Do not post hate speech, violence, or discrimination.</li>
+             <li>• Do not spam or post unrelated commercial content.</li>
+             <li>• Do not share private information of others without consent.</li>
+             <li>• Do not impersonate other individuals or organizations.</li>
+             <li>• Do not misuse the funding application process.</li>
+          </ul>
+       </div>
+    </div>
+
+    <div className="mt-10 pt-8 border-t border-gray-100">
+       <h3 className="font-bold text-gray-900 mb-4">Content Moderation</h3>
+       <p className="text-gray-700 mb-4">
+         Our admin team reviews all reported content. Violations of these guidelines may result in content removal, temporary suspension, or permanent account termination.
+       </p>
+       <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800">
+         If you see something that violates these rules, please use the "Report" feature or contact support immediately.
+       </div>
+    </div>
+  </div>
+);
+
+interface HelpViewProps {
+  onNavigate?: (view: any) => void;
+}
+
+export const HelpView: React.FC<HelpViewProps> = ({ onNavigate }) => {
   const faqs = [
     {
       question: "How do I join a project?",
@@ -188,7 +309,10 @@ export const HelpView: React.FC = () => {
             <p className="text-sm text-gray-600 mb-4">
               Can't find what you're looking for? Our support team is here to assist you.
             </p>
-            <button className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
+            <button 
+              onClick={() => onNavigate && onNavigate('contact')}
+              className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            >
               <Mail className="w-4 h-4 mr-2" /> Contact Support
             </button>
             <p className="text-xs text-gray-400 mt-3 text-center">Response time: usually within 24 hours.</p>
@@ -199,7 +323,12 @@ export const HelpView: React.FC = () => {
              <p className="text-xs text-gray-600 mb-3">
                Learn about the rules and best practices for collaborating on Ponsectors.
              </p>
-             <a href="#" className="text-sm text-blue-600 font-medium hover:underline">Read Guidelines &rarr;</a>
+             <button 
+               onClick={() => onNavigate && onNavigate('guidelines')} 
+               className="text-sm text-blue-600 font-medium hover:underline flex items-center"
+             >
+               Read Guidelines <FileText className="w-3 h-3 ml-1"/>
+             </button>
           </div>
         </div>
       </div>

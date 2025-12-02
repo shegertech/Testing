@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { api } from './services/mockStore';
+import { api } from './services/api'; // Changed import
 import { User, UserRole } from './types';
 import { 
   Menu, X, User as UserIcon, LogOut, Settings, HelpCircle, 
@@ -13,49 +14,64 @@ import FundingDashboard from './components/FundingDashboard';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import AdminDashboard from './components/AdminDashboard';
-import { AboutView, PrivacyView, TermsView, HelpView } from './components/StaticPages';
+import { AboutView, PrivacyView, TermsView, HelpView, ContactView, GuidelinesView } from './components/StaticPages';
 
 // Simple router states
-type View = 'auth' | 'home' | 'projects' | 'insights' | 'funding' | 'profile' | 'settings' | 'admin' | 'about' | 'privacy' | 'terms' | 'help';
+type View = 'auth' | 'home' | 'projects' | 'insights' | 'funding' | 'profile' | 'settings' | 'admin' | 'about' | 'privacy' | 'terms' | 'help' | 'contact' | 'guidelines';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('auth');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = api.users.getCurrentUser();
-    if (storedUser) {
-      setUser(storedUser);
-      setCurrentView('home');
-    }
+    // Async check for user
+    const checkUser = async () => {
+      try {
+        const storedUser = await api.users.getCurrentUser();
+        if (storedUser) {
+          setUser(storedUser);
+          setCurrentView('home');
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkUser();
   }, []);
 
   const handleLogin = (u: User) => {
     setUser(u);
-    api.users.setCurrentUser(u.id);
+    api.users.setCurrentUser(u.id); // For mock store persistence
     setCurrentView('home');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await api.users.setCurrentUser(null);
     setUser(null);
-    api.users.setCurrentUser(null);
     setCurrentView('auth');
     setIsProfileMenuOpen(false);
   };
 
   const handleUpdateUser = (updatedUser: User) => {
     setUser(updatedUser);
+    // Don't need to call setCurrentUser here usually, but good for sync
     api.users.setCurrentUser(updatedUser.id);
   };
 
+  // Allow profile view to navigate to Admin
+  const handleNavigate = (view: View) => {
+    setCurrentView(view);
+    setIsMobileMenuOpen(false);
+  }
+
   const NavItem = ({ view, icon: Icon, label }: { view: View; icon: any; label: string }) => (
     <button
-      onClick={() => {
-        setCurrentView(view);
-        setIsMobileMenuOpen(false);
-      }}
+      onClick={() => handleNavigate(view)}
       className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
         currentView === view 
           ? 'bg-blue-100 text-blue-700' 
@@ -66,6 +82,8 @@ const App: React.FC = () => {
       <span>{label}</span>
     </button>
   );
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading Ponsectors...</div>;
 
   if (!user || currentView === 'auth') {
     return <AuthFlow onLogin={handleLogin} />;
@@ -123,6 +141,7 @@ const App: React.FC = () => {
                     >
                       <div className="flex items-center"><Settings className="w-4 h-4 mr-2" /> Settings</div>
                     </button>
+                    {/* Explicitly show Admin Panel button if role is Admin */}
                     {user.role === UserRole.ADMIN && (
                       <button 
                         onClick={() => { setCurrentView('admin'); setIsProfileMenuOpen(false); }}
@@ -182,11 +201,16 @@ const App: React.FC = () => {
         {currentView === 'funding' && <FundingDashboard user={user} />}
         {currentView === 'profile' && <ProfileView user={user} />}
         {currentView === 'settings' && <SettingsView user={user} onUpdateUser={handleUpdateUser} />}
+        
+        {/* Only render Admin Dashboard if user is Admin */}
         {currentView === 'admin' && user.role === UserRole.ADMIN && <AdminDashboard />}
+        
         {currentView === 'about' && <AboutView />}
         {currentView === 'privacy' && <PrivacyView />}
         {currentView === 'terms' && <TermsView />}
-        {currentView === 'help' && <HelpView />}
+        {currentView === 'help' && <HelpView onNavigate={(view) => setCurrentView(view as any)} />}
+        {currentView === 'contact' && <ContactView />}
+        {currentView === 'guidelines' && <GuidelinesView />}
       </main>
 
       {/* Footer */}

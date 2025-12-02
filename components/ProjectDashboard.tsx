@@ -1,23 +1,26 @@
-import React, { useState } from 'react';
-import { api } from '../services/mockStore';
-import { User, Project, ProjectStatus, CollaboratorRole } from '../types';
+
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
+import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment } from '../types';
 import { THEMATIC_AREAS, COUNTRIES } from '../constants';
-import { Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, MessageSquare, Share2, UserPlus, Clock, AlertCircle } from 'lucide-react';
+import { Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, MessageSquare, Share2, UserPlus, Clock, AlertCircle, Loader, Bookmark, Edit } from 'lucide-react';
 
 interface Props {
   user: User;
+  onUpdateUser?: (u: User) => void;
 }
 
 type Tab = 'my-projects' | 'create' | 'portfolio' | 'detail';
 
-// --- Sub Components Defined Outside to Prevent Re-renders/Focus Loss ---
+// --- Sub Components ---
 
 const ProjectCard: React.FC<{ 
   project: Project; 
   user: User;
   onSelect: (p: Project) => void; 
+  onEdit: (p: Project) => void;
   showActions?: boolean 
-}> = ({ project, user, onSelect, showActions = false }) => {
+}> = ({ project, user, onSelect, onEdit, showActions = false }) => {
   const isOwner = project.ownerId === user.id;
   const isCollaborator = project.collaborators.some(c => c.userId === user.id);
   const showJoin = !isOwner && !isCollaborator;
@@ -94,7 +97,12 @@ const ProjectCard: React.FC<{
                    </button>
                 )}
                 {isOwner && (
-                    <button className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 px-2">Edit</button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onEdit(project); }} 
+                        className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 px-2"
+                    >
+                        Edit
+                    </button>
                 )}
              </div>
         </div>
@@ -111,15 +119,18 @@ interface CreateFormProps {
   selectedFiles: File[];
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   removeFile: (i: number) => void;
+  removeExistingAttachment: (i: number) => void;
   handleCreate: (status: ProjectStatus) => void;
+  isSubmitting: boolean;
+  isEditing: boolean;
 }
 
 const CreateForm: React.FC<CreateFormProps> = ({
   newProject, setNewProject, inviteEmails, setInviteEmails, 
-  selectedFiles, onFileChange, removeFile, handleCreate
+  selectedFiles, onFileChange, removeFile, removeExistingAttachment, handleCreate, isSubmitting, isEditing
 }) => (
   <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-    <h2 className="text-2xl font-bold mb-6 text-gray-800">Create a New Project</h2>
+    <h2 className="text-2xl font-bold mb-6 text-gray-800">{isEditing ? 'Edit Project' : 'Create a New Project'}</h2>
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700">Project Title *</label>
@@ -162,20 +173,47 @@ const CreateForm: React.FC<CreateFormProps> = ({
               </select>
           </div>
       </div>
-      <div>
-         <label className="block text-sm font-medium text-gray-700">Invite Collaborators (Emails)</label>
-         <input 
-          type="text" 
-          className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-          placeholder="email1@example.com, email2@example.com"
-          value={inviteEmails}
-          onChange={e => setInviteEmails(e.target.value)}
-        />
-      </div>
+      {!isEditing && (
+        <div>
+           <label className="block text-sm font-medium text-gray-700">Invite Collaborators (Emails)</label>
+           <input 
+            type="text" 
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            placeholder="email1@example.com, email2@example.com"
+            value={inviteEmails}
+            onChange={e => setInviteEmails(e.target.value)}
+          />
+        </div>
+      )}
       
       {/* File Upload Section */}
       <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+          
+          {/* Existing Attachments */}
+          {newProject.attachments && newProject.attachments.length > 0 && (
+             <div className="mb-4 space-y-2">
+                <p className="text-xs text-gray-500 font-semibold uppercase">Existing Files:</p>
+                {newProject.attachments.map((file, index) => (
+                    <div key={`existing-${index}`} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
+                        <div className="flex items-center space-x-3 overflow-hidden">
+                             <FileText className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                            <div className="truncate">
+                                <p className="text-sm font-medium text-gray-700 truncate">{file.name}</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => removeExistingAttachment(index)}
+                            className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition"
+                            title="Remove file"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                ))}
+             </div>
+          )}
+
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
               <input 
                   type="file" 
@@ -191,8 +229,9 @@ const CreateForm: React.FC<CreateFormProps> = ({
 
           {selectedFiles.length > 0 && (
               <div className="mt-4 space-y-2">
+                  <p className="text-xs text-green-600 font-semibold uppercase">New Files to Upload:</p>
                   {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                      <div key={`new-${index}`} className="flex items-center justify-between p-3 bg-white border border-green-200 rounded-lg shadow-sm">
                           <div className="flex items-center space-x-3 overflow-hidden">
                               {file.type.startsWith('image/') ? (
                                   <ImageIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />
@@ -219,20 +258,24 @@ const CreateForm: React.FC<CreateFormProps> = ({
       <div className="flex justify-end space-x-3 pt-4">
           <button 
               onClick={() => handleCreate(ProjectStatus.DRAFT)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-              Save as Draft
+              {isEditing ? 'Save as Draft' : 'Save as Draft'}
           </button>
           <button 
-              onClick={() => handleCreate(ProjectStatus.PENDING)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              onClick={() => handleCreate(isEditing ? newProject.status || ProjectStatus.SHARED : ProjectStatus.PENDING)}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
           >
-              Publish Project
+              {isSubmitting ? 'Saving...' : isEditing ? 'Update Project' : 'Publish Project'}
           </button>
       </div>
-      <p className="text-xs text-gray-500 text-right mt-2">
-        Note: Published projects require admin approval before becoming visible.
-      </p>
+      {!isEditing && (
+        <p className="text-xs text-gray-500 text-right mt-2">
+            Note: Published projects require admin approval before becoming visible.
+        </p>
+      )}
     </div>
   </div>
 );
@@ -240,31 +283,77 @@ const CreateForm: React.FC<CreateFormProps> = ({
 const ProjectDetail: React.FC<{ 
     project: Project; 
     user: User; 
-    onBack: () => void 
-}> = ({ project, user, onBack }) => {
-    const owner = api.users.getById(project.ownerId);
+    onBack: () => void;
+    onUpdateUser?: (u: User) => void;
+    onEdit: (p: Project) => void;
+}> = ({ project, user, onBack, onUpdateUser, onEdit }) => {
+    const [owner, setOwner] = useState<User | null>(null);
     const [comment, setComment] = useState('');
     const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
-    const comments = api.comments.getByParent(project.id);
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+    
     const isOwner = user.id === project.ownerId;
+    const isSaved = user.savedProjectIds?.includes(project.id);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handlePostComment = () => {
+    useEffect(() => {
+        const loadDetails = async () => {
+            const o = await api.users.getById(project.ownerId);
+            setOwner(o || null);
+            const c = await api.comments.getByParent(project.id);
+            setComments(c);
+            
+            // Resolve commenter names
+            const map: Record<string, string> = {};
+            for(const com of c) {
+                if(!map[com.authorId]) {
+                    const u = await api.users.getById(com.authorId);
+                    if(u) map[com.authorId] = u.name;
+                }
+            }
+            // Resolve Collaborator names
+            for(const col of project.collaborators) {
+                 if(!map[col.userId]) {
+                     const u = await api.users.getById(col.userId);
+                     if(u) map[col.userId] = u.name;
+                 }
+            }
+            setUsersMap(map);
+        };
+        loadDetails();
+    }, [project]);
+
+    const handlePostComment = async () => {
         if(!comment) return;
-        api.comments.add({
+        const newC = await api.comments.add({
             id: `c${Date.now()}`,
             parentId: project.id,
             authorId: user.id,
             text: comment,
             createdAt: new Date().toISOString()
         });
+        setComments([...comments, newC]);
         setComment('');
     };
 
     const handleInvite = () => {
         if (!newCollaboratorEmail) return;
-        // Mock invitation logic
         alert(`Invitation sent to ${newCollaboratorEmail}`);
         setNewCollaboratorEmail('');
+    };
+
+    const handleToggleSave = async () => {
+        if (!onUpdateUser) return;
+        setIsSaving(true);
+        try {
+            const updatedUser = await api.users.toggleSave(user.id, project.id);
+            onUpdateUser(updatedUser);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -277,19 +366,38 @@ const ProjectDetail: React.FC<{
                     </button>
                     <div className="flex justify-between items-start">
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.title}</h1>
-                        {project.status === ProjectStatus.PENDING && (
-                            <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold flex items-center">
-                                <Clock className="w-3 h-3 mr-1" /> Pending Approval
-                            </span>
-                        )}
-                        {project.status === ProjectStatus.REJECTED && (
-                             <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold flex items-center">
-                                <AlertCircle className="w-3 h-3 mr-1" /> Rejected
-                            </span>
-                        )}
+                        <div className="flex items-center space-x-2">
+                             {project.status === ProjectStatus.PENDING && (
+                                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" /> Pending Approval
+                                </span>
+                            )}
+                            {project.status === ProjectStatus.REJECTED && (
+                                <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold flex items-center">
+                                    <AlertCircle className="w-3 h-3 mr-1" /> Rejected
+                                </span>
+                            )}
+                            <button 
+                                onClick={handleToggleSave}
+                                disabled={isSaving}
+                                className={`p-2 rounded-full border transition ${isSaved ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'}`}
+                                title={isSaved ? "Unsave Project" : "Save Project"}
+                            >
+                                <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
+                            </button>
+                            {isOwner && (
+                                <button 
+                                    onClick={() => onEdit(project)}
+                                    className="p-2 rounded-full border bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 transition"
+                                    title="Edit Project"
+                                >
+                                    <Edit className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="flex items-center text-sm text-gray-500 space-x-4">
-                        <span className="flex items-center"><Users className="w-4 h-4 mr-1"/> Lead: {owner?.name}</span>
+                        <span className="flex items-center"><Users className="w-4 h-4 mr-1"/> Lead: {owner?.name || 'Loading...'}</span>
                         <span>{new Date(project.createdAt).toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -326,14 +434,14 @@ const ProjectDetail: React.FC<{
                     <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
                         {comments.length === 0 && <p className="text-gray-400 text-sm">No comments yet. Start the discussion!</p>}
                         {comments.map(c => {
-                             const author = api.users.getById(c.authorId);
+                             const name = usersMap[c.authorId] || (c.authorId === user.id ? user.name : 'Unknown');
                              return (
                                 <div key={c.id} className="flex space-x-3">
                                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
-                                        {author?.name.charAt(0)}
+                                        {name.charAt(0)}
                                     </div>
                                     <div className="bg-gray-50 p-3 rounded-lg rounded-tl-none">
-                                        <div className="text-xs font-bold text-gray-700">{author?.name}</div>
+                                        <div className="text-xs font-bold text-gray-700">{name}</div>
                                         <p className="text-sm text-gray-600">{c.text}</p>
                                     </div>
                                 </div>
@@ -383,14 +491,14 @@ const ProjectDetail: React.FC<{
                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Collaborators</h4>
                     <div className="space-y-3 mb-4">
                         {project.collaborators.map((c, i) => {
-                             const u = api.users.getById(c.userId);
+                             const name = usersMap[c.userId] || (c.userId === user.id ? user.name : 'Unknown');
                              return (
                                 <div key={i} className="flex items-center space-x-2">
                                     <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs text-gray-600">
-                                        {u?.name.charAt(0)}
+                                        {name.charAt(0)}
                                     </div>
                                     <div>
-                                        <div className="text-sm font-medium text-gray-900">{u?.name}</div>
+                                        <div className="text-sm font-medium text-gray-900">{name}</div>
                                         <div className="text-xs text-gray-500">{c.role}</div>
                                     </div>
                                 </div>
@@ -435,11 +543,16 @@ const ProjectDetail: React.FC<{
 
 // --- Main Component ---
 
-const ProjectDashboard: React.FC<Props> = ({ user }) => {
+const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
   const [activeTab, setActiveTab] = useState<Tab>('my-projects');
   const [subTab, setSubTab] = useState<'shared' | 'joined' | 'saved'>('shared');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Data State
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Create Form State
   const [newProject, setNewProject] = useState<Partial<Project>>({
@@ -447,61 +560,92 @@ const ProjectDashboard: React.FC<Props> = ({ user }) => {
     description: '',
     thematicArea: THEMATIC_AREAS[0],
     country: user.country,
-    visibility: 'Public'
+    visibility: 'Public',
+    attachments: []
   });
   const [inviteEmails, setInviteEmails] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  useEffect(() => {
+    fetchProjects();
+  }, [user]);
+
+  const fetchProjects = async () => {
+      setLoading(true);
+      const all = await api.projects.getAll();
+      setProjects(all);
+      setLoading(false);
+  };
+
   // --- Helpers ---
-  const mySharedProjects = api.projects.getAll().filter(p => p.ownerId === user.id);
-  const myJoinedProjects = api.projects.getAll().filter(p => 
+  const mySharedProjects = projects.filter(p => p.ownerId === user.id);
+  const myJoinedProjects = projects.filter(p => 
     p.collaborators.some(c => c.userId === user.id && c.role !== CollaboratorRole.OWNER)
   );
-  // Simulating "Saved" just by taking first 2 shared projects not owned by me
-  const mySavedProjects = api.projects.getAll().filter(p => p.ownerId !== user.id).slice(0, 2); 
-  const portfolioProjects = api.projects.getAll().filter(p => p.status === ProjectStatus.SHARED && p.visibility === 'Public');
+  // Filter saved projects based on User's saved list
+  const mySavedProjects = projects.filter(p => user.savedProjectIds?.includes(p.id)); 
+  const portfolioProjects = projects.filter(p => p.status === ProjectStatus.SHARED && p.visibility === 'Public');
 
-  const handleCreate = (status: ProjectStatus) => {
+  const handleCreate = async (status: ProjectStatus) => {
+    setIsSubmitting(true);
     // Convert files to mock attachments
-    const attachments = selectedFiles.map(file => ({
+    const newAttachments: Attachment[] = selectedFiles.map(file => ({
       name: file.name,
       url: URL.createObjectURL(file), // Mock URL
       type: file.type,
       size: file.size
     }));
+    
+    // Combine existing attachments (if editing) with new ones
+    const finalAttachments = [
+        ...(newProject.attachments || []),
+        ...newAttachments
+    ];
 
-    const project: Project = {
-      id: `p${Date.now()}`,
+    const projectData: Project = {
+      ...newProject,
+      id: newProject.id || `p${Date.now()}`,
       title: newProject.title!,
       description: newProject.description!,
       thematicArea: newProject.thematicArea!,
       country: newProject.country!,
       city: newProject.city || '',
       ownerId: user.id,
-      collaborators: [{ userId: user.id, role: CollaboratorRole.OWNER, status: 'Active' }],
-      status,
-      attachments: attachments,
-      createdAt: new Date().toISOString(),
+      collaborators: newProject.collaborators || [{ userId: user.id, role: CollaboratorRole.OWNER, status: 'Active' }],
+      status: status, // Update status
+      attachments: finalAttachments,
+      createdAt: newProject.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      joinRequests: [],
-      visibility: newProject.visibility as any,
-      commentCount: 0,
-      saveCount: 0
-    };
+      joinRequests: newProject.joinRequests || [],
+      visibility: newProject.visibility as any || 'Public',
+      commentCount: newProject.commentCount || 0,
+      saveCount: newProject.saveCount || 0
+    } as Project;
     
-    // Simulate invites
-    if (inviteEmails) {
-        // In a real app, parse emails and send invites
+    // Simulate invites only for new projects
+    if (inviteEmails && !newProject.id) {
         console.log(`Inviting: ${inviteEmails}`);
     }
 
-    api.projects.create(project);
-    if (status === ProjectStatus.PENDING) {
-        alert("Project submitted for review! It will be visible in the portfolio once approved by an admin.");
+    if (newProject.id) {
+        await api.projects.update(projectData);
+        alert("Project updated successfully!");
+    } else {
+        await api.projects.create(projectData);
+        if (status === ProjectStatus.PENDING) {
+            alert("Project submitted for review! It will be visible in the portfolio once approved by an admin.");
+        }
     }
+    
+    await fetchProjects();
     setActiveTab('my-projects');
     setSubTab('shared');
-    setNewProject({ title: '', description: '', thematicArea: THEMATIC_AREAS[0], country: user.country, visibility: 'Public' });
+    resetForm();
+    setIsSubmitting(false);
+  };
+
+  const resetForm = () => {
+    setNewProject({ title: '', description: '', thematicArea: THEMATIC_AREAS[0], country: user.country, visibility: 'Public', attachments: [] });
     setInviteEmails('');
     setSelectedFiles([]);
   };
@@ -516,9 +660,22 @@ const ProjectDashboard: React.FC<Props> = ({ user }) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const removeExistingAttachment = (index: number) => {
+      if (!newProject.attachments) return;
+      const updated = [...newProject.attachments];
+      updated.splice(index, 1);
+      setNewProject({ ...newProject, attachments: updated });
+  };
+
   const handleSelectProject = (project: Project) => {
       setSelectedProject(project);
       setActiveTab('detail');
+  };
+
+  const handleEditProject = (project: Project) => {
+      setNewProject({ ...project });
+      setSelectedFiles([]); // Clear new file selection
+      setActiveTab('create');
   };
 
   return (
@@ -526,93 +683,105 @@ const ProjectDashboard: React.FC<Props> = ({ user }) => {
       {/* Sub Navigation */}
       <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-6 inline-flex border border-gray-200">
         <button 
-            onClick={() => setActiveTab('my-projects')}
+            onClick={() => { setActiveTab('my-projects'); resetForm(); }}
             className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'my-projects' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
         >
             My Projects
         </button>
         <button 
-            onClick={() => setActiveTab('create')}
+            onClick={() => { setActiveTab('create'); resetForm(); }}
             className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'create' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
         >
             Create Project
         </button>
         <button 
-            onClick={() => setActiveTab('portfolio')}
+            onClick={() => { setActiveTab('portfolio'); resetForm(); }}
             className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'portfolio' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
         >
             Project Portfolio
         </button>
       </div>
 
-      {/* Content Area */}
-      {activeTab === 'my-projects' && (
-        <div className="space-y-6">
-            <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-8">
-                    <button onClick={() => setSubTab('shared')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'shared' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Shared & Pending</button>
-                    <button onClick={() => setSubTab('joined')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'joined' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Joined</button>
-                    <button onClick={() => setSubTab('saved')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'saved' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Saved</button>
-                </nav>
-            </div>
-            <div className="grid gap-4">
-                {subTab === 'shared' && mySharedProjects.length === 0 && <p className="text-gray-500">You haven't created any projects yet.</p>}
-                {subTab === 'shared' && mySharedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
-                
-                {subTab === 'joined' && myJoinedProjects.length === 0 && <p className="text-gray-500">You haven't joined any projects yet.</p>}
-                {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
-                
-                {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
-            </div>
-        </div>
-      )}
-
-      {activeTab === 'create' && (
-        <CreateForm 
-            newProject={newProject}
-            setNewProject={setNewProject}
-            inviteEmails={inviteEmails}
-            setInviteEmails={setInviteEmails}
-            selectedFiles={selectedFiles}
-            onFileChange={onFileChange}
-            removeFile={removeFile}
-            handleCreate={handleCreate}
-        />
-      )}
-
-      {activeTab === 'portfolio' && (
-        <div className="space-y-6">
-            <div className="flex space-x-4 mb-4">
-                <div className="relative flex-1">
-                    <input 
-                        type="text" 
-                        placeholder="Search projects..." 
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                    <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
+      {loading && activeTab !== 'create' ? (
+          <div className="flex justify-center p-10 text-gray-500"><Loader className="animate-spin mr-2" /> Loading projects...</div>
+      ) : (
+          <>
+            {/* Content Area */}
+            {activeTab === 'my-projects' && (
+                <div className="space-y-6">
+                    <div className="border-b border-gray-200">
+                        <nav className="-mb-px flex space-x-8">
+                            <button onClick={() => setSubTab('shared')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'shared' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Shared & Pending</button>
+                            <button onClick={() => setSubTab('joined')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'joined' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Joined</button>
+                            <button onClick={() => setSubTab('saved')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'saved' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Saved</button>
+                        </nav>
+                    </div>
+                    <div className="grid gap-4">
+                        {subTab === 'shared' && mySharedProjects.length === 0 && <p className="text-gray-500">You haven't created any projects yet.</p>}
+                        {subTab === 'shared' && mySharedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                        
+                        {subTab === 'joined' && myJoinedProjects.length === 0 && <p className="text-gray-500">You haven't joined any projects yet.</p>}
+                        {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                        
+                        {subTab === 'saved' && mySavedProjects.length === 0 && <p className="text-gray-500">You haven't saved any projects yet.</p>}
+                        {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                    </div>
                 </div>
-                <select className="border border-gray-300 rounded-md px-3 text-sm">
-                    <option>All Areas</option>
-                    {THEMATIC_AREAS.map(a => <option key={a}>{a}</option>)}
-                </select>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {portfolioProjects
-                    .filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
-                    .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)
-                }
-            </div>
-        </div>
-      )}
+            )}
 
-      {activeTab === 'detail' && selectedProject && (
-        <ProjectDetail 
-            project={selectedProject} 
-            user={user} 
-            onBack={() => setActiveTab('portfolio')} 
-        />
+            {activeTab === 'create' && (
+                <CreateForm 
+                    newProject={newProject}
+                    setNewProject={setNewProject}
+                    inviteEmails={inviteEmails}
+                    setInviteEmails={setInviteEmails}
+                    selectedFiles={selectedFiles}
+                    onFileChange={onFileChange}
+                    removeFile={removeFile}
+                    removeExistingAttachment={removeExistingAttachment}
+                    handleCreate={handleCreate}
+                    isSubmitting={isSubmitting}
+                    isEditing={!!newProject.id}
+                />
+            )}
+
+            {activeTab === 'portfolio' && (
+                <div className="space-y-6">
+                    <div className="flex space-x-4 mb-4">
+                        <div className="relative flex-1">
+                            <input 
+                                type="text" 
+                                placeholder="Search projects..." 
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
+                        </div>
+                        <select className="border border-gray-300 rounded-md px-3 text-sm">
+                            <option>All Areas</option>
+                            {THEMATIC_AREAS.map(a => <option key={a}>{a}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {portfolioProjects
+                            .filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)
+                        }
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'detail' && selectedProject && (
+                <ProjectDetail 
+                    project={selectedProject} 
+                    user={user} 
+                    onBack={() => setActiveTab('portfolio')}
+                    onUpdateUser={onUpdateUser}
+                    onEdit={handleEditProject}
+                />
+            )}
+          </>
       )}
     </div>
   );

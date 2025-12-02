@@ -25,7 +25,8 @@ const seedData = () => {
       role: UserRole.STANDARD,
       isVerified: true,
       joinedAt: new Date().toISOString(),
-      about: 'Software engineer passionate about agritech.'
+      about: 'Software engineer passionate about agritech.',
+      savedProjectIds: []
     },
     {
       id: 'u2',
@@ -40,7 +41,8 @@ const seedData = () => {
       role: UserRole.PREMIUM,
       isVerified: true,
       joinedAt: new Date().toISOString(),
-      about: 'Leading agricultural development in Ethiopia.'
+      about: 'Leading agricultural development in Ethiopia.',
+      savedProjectIds: []
     },
     {
       id: 'admin1',
@@ -53,7 +55,8 @@ const seedData = () => {
       focusAreas: [],
       role: UserRole.ADMIN,
       isVerified: true,
-      joinedAt: new Date().toISOString()
+      joinedAt: new Date().toISOString(),
+      savedProjectIds: []
     }
   ];
 
@@ -131,23 +134,25 @@ const seedData = () => {
 
 seedData();
 
-// --- API Methods ---
-
+// --- Helpers ---
 const get = <T>(key: string): T[] => JSON.parse(localStorage.getItem(key) || '[]');
 const set = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms)); // Simulate network latency
 
-export const api = {
+export const mockApi = {
   // Auth
   users: {
-    getAll: () => get<User>(USERS_KEY),
-    getById: (id: string) => get<User>(USERS_KEY).find(u => u.id === id),
-    create: (user: User) => {
+    getAll: async () => { await delay(200); return get<User>(USERS_KEY); },
+    getById: async (id: string) => { await delay(100); return get<User>(USERS_KEY).find(u => u.id === id); },
+    create: async (user: User) => {
+      await delay(500);
       const users = get<User>(USERS_KEY);
       users.push(user);
       set(USERS_KEY, users);
       return user;
     },
-    update: (user: User) => {
+    update: async (user: User) => {
+      await delay(300);
       const users = get<User>(USERS_KEY);
       const idx = users.findIndex(u => u.id === user.id);
       if (idx !== -1) {
@@ -155,16 +160,35 @@ export const api = {
         set(USERS_KEY, users);
       }
     },
-    login: (email: string, pass: string) => {
+    login: async (email: string, pass: string) => {
+      await delay(800);
       const users = get<User>(USERS_KEY);
       return users.find(u => u.email === email && u.passwordHash === pass);
     },
-    getCurrentUser: () => {
+    toggleSave: async (userId: string, projectId: string) => {
+      await delay(200);
+      const users = get<User>(USERS_KEY);
+      const idx = users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        const user = users[idx];
+        const saved = user.savedProjectIds || [];
+        if (saved.includes(projectId)) {
+          user.savedProjectIds = saved.filter(id => id !== projectId);
+        } else {
+          user.savedProjectIds = [...saved, projectId];
+        }
+        users[idx] = user;
+        set(USERS_KEY, users);
+        return user;
+      }
+      throw new Error("User not found");
+    },
+    getCurrentUser: async () => {
       const id = localStorage.getItem(CURRENT_USER_KEY);
       if (!id) return null;
       return get<User>(USERS_KEY).find(u => u.id === id) || null;
     },
-    setCurrentUser: (id: string | null) => {
+    setCurrentUser: async (id: string | null) => {
       if (id) localStorage.setItem(CURRENT_USER_KEY, id);
       else localStorage.removeItem(CURRENT_USER_KEY);
     }
@@ -172,14 +196,16 @@ export const api = {
 
   // Projects
   projects: {
-    getAll: () => get<Project>(PROJECTS_KEY),
-    create: (project: Project) => {
+    getAll: async () => { await delay(300); return get<Project>(PROJECTS_KEY); },
+    create: async (project: Project) => {
+      await delay(500);
       const projects = get<Project>(PROJECTS_KEY);
-      projects.unshift(project); // Add to top
+      projects.unshift(project);
       set(PROJECTS_KEY, projects);
       return project;
     },
-    update: (project: Project) => {
+    update: async (project: Project) => {
+      await delay(300);
       const projects = get<Project>(PROJECTS_KEY);
       const idx = projects.findIndex(p => p.id === project.id);
       if (idx !== -1) {
@@ -187,7 +213,8 @@ export const api = {
         set(PROJECTS_KEY, projects);
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
+      await delay(300);
       const projects = get<Project>(PROJECTS_KEY).filter(p => p.id !== id);
       set(PROJECTS_KEY, projects);
     }
@@ -195,14 +222,16 @@ export const api = {
 
   // Insights
   insights: {
-    getAll: () => get<Insight>(INSIGHTS_KEY),
-    create: (insight: Insight) => {
+    getAll: async () => { await delay(200); return get<Insight>(INSIGHTS_KEY); },
+    create: async (insight: Insight) => {
+      await delay(400);
       const items = get<Insight>(INSIGHTS_KEY);
       items.unshift(insight);
       set(INSIGHTS_KEY, items);
       return insight;
     },
-    update: (insight: Insight) => {
+    update: async (insight: Insight) => {
+      await delay(300);
       const items = get<Insight>(INSIGHTS_KEY);
       const idx = items.findIndex(i => i.id === insight.id);
       if (idx !== -1) {
@@ -210,21 +239,24 @@ export const api = {
         set(INSIGHTS_KEY, items);
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
+      await delay(300);
       set(INSIGHTS_KEY, get<Insight>(INSIGHTS_KEY).filter(i => i.id !== id));
     }
   },
 
   // Funding
   funding: {
-    getAll: () => get<FundingOpportunity>(FUNDING_KEY),
-    create: (opp: FundingOpportunity) => {
+    getAll: async () => { await delay(200); return get<FundingOpportunity>(FUNDING_KEY); },
+    create: async (opp: FundingOpportunity) => {
+      await delay(400);
       const items = get<FundingOpportunity>(FUNDING_KEY);
       items.unshift(opp);
       set(FUNDING_KEY, items);
       return opp;
     },
-    update: (opp: FundingOpportunity) => {
+    update: async (opp: FundingOpportunity) => {
+      await delay(300);
       const items = get<FundingOpportunity>(FUNDING_KEY);
       const idx = items.findIndex(f => f.id === opp.id);
       if (idx !== -1) {
@@ -232,15 +264,17 @@ export const api = {
         set(FUNDING_KEY, items);
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
+      await delay(300);
       set(FUNDING_KEY, get<FundingOpportunity>(FUNDING_KEY).filter(f => f.id !== id));
     }
   },
   
   // Comments
   comments: {
-    getByParent: (parentId: string) => get<Comment>(COMMENTS_KEY).filter(c => c.parentId === parentId),
-    add: (comment: Comment) => {
+    getByParent: async (parentId: string) => { await delay(100); return get<Comment>(COMMENTS_KEY).filter(c => c.parentId === parentId); },
+    add: async (comment: Comment) => {
+      await delay(200);
       const all = get<Comment>(COMMENTS_KEY);
       all.push(comment);
       set(COMMENTS_KEY, all);

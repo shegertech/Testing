@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api } from '../services/mockStore';
+import { api } from '../services/api';
 import { User } from '../types';
 import { Save, Bell, Lock, User as UserIcon } from 'lucide-react';
 import { COUNTRIES } from '../constants';
@@ -19,12 +19,15 @@ const SettingsView: React.FC<Props> = ({ user, onUpdateUser }) => {
 
   const [notificationEmail, setNotificationEmail] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     const updatedUser = { ...user, ...formData };
-    api.users.update(updatedUser);
+    await api.users.update(updatedUser);
     onUpdateUser(updatedUser);
+    setLoading(false);
     setSuccessMsg('Profile updated successfully!');
     setTimeout(() => setSuccessMsg(''), 3000);
   };
@@ -87,8 +90,8 @@ const SettingsView: React.FC<Props> = ({ user, onUpdateUser }) => {
                 />
             </div>
             <div className="flex justify-end">
-                <button type="submit" className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                    <Save className="w-4 h-4 mr-2" /> Save Changes
+                <button type="submit" disabled={loading} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                    <Save className="w-4 h-4 mr-2" /> {loading ? 'Saving...' : 'Save Changes'}
                 </button>
             </div>
         </form>
