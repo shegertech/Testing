@@ -7,6 +7,7 @@ export enum StakeholderType {
 export enum UserRole {
   STANDARD = 'Standard',
   PREMIUM = 'Premium',
+  ADMIN = 'Admin',
 }
 
 export interface User {
@@ -28,7 +29,9 @@ export interface User {
 
 export enum ProjectStatus {
   DRAFT = 'Draft',
+  PENDING = 'Pending',
   SHARED = 'Shared',
+  REJECTED = 'Rejected',
 }
 
 export enum CollaboratorRole {

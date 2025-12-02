@@ -3,7 +3,7 @@ import { api } from './services/mockStore';
 import { User, UserRole } from './types';
 import { 
   Menu, X, User as UserIcon, LogOut, Settings, HelpCircle, 
-  Home as HomeIcon, Briefcase, Lightbulb, DollarSign 
+  Home as HomeIcon, Briefcase, Lightbulb, DollarSign, ShieldCheck 
 } from 'lucide-react';
 import AuthFlow from './components/AuthFlow';
 import HomeFeed from './components/HomeFeed';
@@ -12,10 +12,11 @@ import InsightsDashboard from './components/InsightsDashboard';
 import FundingDashboard from './components/FundingDashboard';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
-import { AboutView, PrivacyView, TermsView } from './components/StaticPages';
+import AdminDashboard from './components/AdminDashboard';
+import { AboutView, PrivacyView, TermsView, HelpView } from './components/StaticPages';
 
 // Simple router states
-type View = 'auth' | 'home' | 'projects' | 'insights' | 'funding' | 'profile' | 'settings' | 'about' | 'privacy' | 'terms';
+type View = 'auth' | 'home' | 'projects' | 'insights' | 'funding' | 'profile' | 'settings' | 'admin' | 'about' | 'privacy' | 'terms' | 'help';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -122,9 +123,20 @@ const App: React.FC = () => {
                     >
                       <div className="flex items-center"><Settings className="w-4 h-4 mr-2" /> Settings</div>
                     </button>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    {user.role === UserRole.ADMIN && (
+                      <button 
+                        onClick={() => { setCurrentView('admin'); setIsProfileMenuOpen(false); }}
+                        className="block w-full text-left px-4 py-2 text-sm text-purple-700 hover:bg-purple-50"
+                      >
+                        <div className="flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> Admin Panel</div>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => { setCurrentView('help'); setIsProfileMenuOpen(false); }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
                       <div className="flex items-center"><HelpCircle className="w-4 h-4 mr-2" /> Help</div>
-                    </a>
+                    </button>
                     <div className="border-t border-gray-100 my-1"></div>
                     <button
                       onClick={handleLogout}
@@ -170,9 +182,11 @@ const App: React.FC = () => {
         {currentView === 'funding' && <FundingDashboard user={user} />}
         {currentView === 'profile' && <ProfileView user={user} />}
         {currentView === 'settings' && <SettingsView user={user} onUpdateUser={handleUpdateUser} />}
+        {currentView === 'admin' && user.role === UserRole.ADMIN && <AdminDashboard />}
         {currentView === 'about' && <AboutView />}
         {currentView === 'privacy' && <PrivacyView />}
         {currentView === 'terms' && <TermsView />}
+        {currentView === 'help' && <HelpView />}
       </main>
 
       {/* Footer */}
@@ -183,6 +197,7 @@ const App: React.FC = () => {
             <button onClick={() => setCurrentView('about')} className="text-gray-400 hover:text-gray-500 text-sm">About</button>
             <button onClick={() => setCurrentView('privacy')} className="text-gray-400 hover:text-gray-500 text-sm">Privacy Policy</button>
             <button onClick={() => setCurrentView('terms')} className="text-gray-400 hover:text-gray-500 text-sm">Terms of Use</button>
+            <button onClick={() => setCurrentView('help')} className="text-gray-400 hover:text-gray-500 text-sm">Help</button>
           </div>
         </div>
       </footer>

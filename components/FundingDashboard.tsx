@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../services/mockStore';
 import { User, UserRole, FundingOpportunity, ProjectStatus } from '../types';
-import { Lock } from 'lucide-react';
+import { Lock, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -9,7 +9,10 @@ interface Props {
 
 const FundingDashboard: React.FC<Props> = ({ user }) => {
   const [view, setView] = useState<'list' | 'create'>('list');
-  const opportunities = api.funding.getAll();
+  
+  // Show all SHARED, plus mine (even if pending/rejected)
+  const allOpps = api.funding.getAll();
+  const opportunities = allOpps.filter(o => o.status === ProjectStatus.SHARED || o.ownerId === user.id);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +25,10 @@ const FundingDashboard: React.FC<Props> = ({ user }) => {
         eligibility: 'All',
         applicationInfo: 'Apply',
         ownerId: user.id,
-        status: ProjectStatus.SHARED,
+        status: ProjectStatus.PENDING, // Pending approval
         createdAt: new Date().toISOString()
     });
+    alert("Opportunity submitted for admin review!");
     setView('list');
   };
 
@@ -50,6 +54,7 @@ const FundingDashboard: React.FC<Props> = ({ user }) => {
                 <form onSubmit={handleCreate} className="space-y-4">
                     <p className="text-gray-500 italic">Form simplified for demo...</p>
                     <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Submit Mock Opportunity</button>
+                    <p className="text-xs text-gray-500">Submissions are reviewed by admins within 24 hours.</p>
                 </form>
             </div>
         ) : (
@@ -71,21 +76,39 @@ const FundingDashboard: React.FC<Props> = ({ user }) => {
         )
       ) : (
         <div className="grid gap-6">
-            {opportunities.map(opp => (
-                <div key={opp.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:border-green-200 transition">
+            {opportunities.map(opp => {
+                const isMine = opp.ownerId === user.id;
+                return (
+                <div key={opp.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:border-green-200 transition relative">
                     <div className="flex justify-between items-start">
                         <div>
                             <h3 className="text-lg font-bold text-gray-900">{opp.title}</h3>
                             <p className="text-sm text-green-700 font-medium mt-1">Deadline: {opp.deadline}</p>
                         </div>
-                        <span className="bg-green-50 text-green-700 px-2 py-1 text-xs rounded-full border border-green-100">Grant</span>
+                        <div className="flex flex-col items-end gap-2">
+                             <span className="bg-green-50 text-green-700 px-2 py-1 text-xs rounded-full border border-green-100">Grant</span>
+                             {isMine && (
+                                <>
+                                    {opp.status === ProjectStatus.PENDING && (
+                                        <span className="flex items-center text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                            <Clock className="w-3 h-3 mr-1" /> Pending
+                                        </span>
+                                    )}
+                                    {opp.status === ProjectStatus.REJECTED && (
+                                        <span className="flex items-center text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+                                            <AlertCircle className="w-3 h-3 mr-1" /> Rejected
+                                        </span>
+                                    )}
+                                </>
+                             )}
+                        </div>
                     </div>
                     <p className="text-gray-600 mt-3">{opp.description}</p>
                     <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
                         <button className="text-blue-600 text-sm font-medium hover:underline">View Details & Apply</button>
                     </div>
                 </div>
-            ))}
+            )})}
         </div>
       )}
     </div>

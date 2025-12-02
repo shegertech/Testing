@@ -43,16 +43,15 @@ const seedData = () => {
       about: 'Leading agricultural development in Ethiopia.'
     },
     {
-      id: 'u3',
-      email: 'jane@example.com',
+      id: 'admin1',
+      email: 'admin@ponsectors.com',
       passwordHash: 'password',
       stakeholderType: StakeholderType.INDIVIDUAL,
-      subtype: 'Researcher',
-      name: 'Jane Doe',
-      country: 'Kenya',
-      city: 'Nairobi',
-      focusAreas: ['Climate Change and Environmental Sustainability'],
-      role: UserRole.STANDARD,
+      name: 'System Admin',
+      country: 'Global',
+      city: '',
+      focusAreas: [],
+      role: UserRole.ADMIN,
       isVerified: true,
       joinedAt: new Date().toISOString()
     }
@@ -203,6 +202,14 @@ export const api = {
       set(INSIGHTS_KEY, items);
       return insight;
     },
+    update: (insight: Insight) => {
+      const items = get<Insight>(INSIGHTS_KEY);
+      const idx = items.findIndex(i => i.id === insight.id);
+      if (idx !== -1) {
+        items[idx] = insight;
+        set(INSIGHTS_KEY, items);
+      }
+    },
     delete: (id: string) => {
       set(INSIGHTS_KEY, get<Insight>(INSIGHTS_KEY).filter(i => i.id !== id));
     }
@@ -216,6 +223,14 @@ export const api = {
       items.unshift(opp);
       set(FUNDING_KEY, items);
       return opp;
+    },
+    update: (opp: FundingOpportunity) => {
+      const items = get<FundingOpportunity>(FUNDING_KEY);
+      const idx = items.findIndex(f => f.id === opp.id);
+      if (idx !== -1) {
+        items[idx] = opp;
+        set(FUNDING_KEY, items);
+      }
     },
     delete: (id: string) => {
       set(FUNDING_KEY, get<FundingOpportunity>(FUNDING_KEY).filter(f => f.id !== id));

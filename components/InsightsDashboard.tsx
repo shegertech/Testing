@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../services/mockStore';
 import { User, Insight, ProjectStatus } from '../types';
+import { Clock, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -11,7 +12,9 @@ const InsightsDashboard: React.FC<Props> = ({ user }) => {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
 
-  const insights = api.insights.getAll();
+  // Only show SHARED to everyone, but show owned items regardless of status
+  const allInsights = api.insights.getAll();
+  const visibleInsights = allInsights.filter(i => i.status === ProjectStatus.SHARED || i.authorId === user.id);
 
   const handleCreate = () => {
     api.insights.create({
@@ -19,10 +22,11 @@ const InsightsDashboard: React.FC<Props> = ({ user }) => {
       title,
       description: desc,
       authorId: user.id,
-      status: ProjectStatus.SHARED,
+      status: ProjectStatus.PENDING, // Pending approval
       attachments: [],
       createdAt: new Date().toISOString()
     });
+    alert("Insight submitted for review!");
     setActiveTab('all');
     setTitle('');
     setDesc('');
@@ -58,15 +62,38 @@ const InsightsDashboard: React.FC<Props> = ({ user }) => {
               onChange={e => setDesc(e.target.value)}
             />
             <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 text-white rounded">Post Insight</button>
+            <p className="text-xs text-gray-500 mt-2">Posts require approval before appearing in the public feed.</p>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {insights.map(i => {
+          {visibleInsights.map(i => {
              const author = api.users.getById(i.authorId);
+             const isMine = i.authorId === user.id;
              return (
-              <div key={i.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-xl font-bold mb-2">{i.title}</h3>
+              <div key={i.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 relative">
+                <div className="flex justify-between items-start">
+                    <h3 className="text-xl font-bold mb-2">{i.title}</h3>
+                    {isMine && (
+                        <div className="flex-shrink-0 ml-2">
+                             {i.status === ProjectStatus.PENDING && (
+                                <span className="flex items-center text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                    <Clock className="w-3 h-3 mr-1" /> Pending
+                                </span>
+                             )}
+                             {i.status === ProjectStatus.REJECTED && (
+                                <span className="flex items-center text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                    <AlertCircle className="w-3 h-3 mr-1" /> Rejected
+                                </span>
+                             )}
+                             {i.status === ProjectStatus.SHARED && (
+                                <span className="flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                    <CheckCircle className="w-3 h-3 mr-1" /> Live
+                                </span>
+                             )}
+                        </div>
+                    )}
+                </div>
                 <p className="text-gray-500 text-sm mb-4">By {author?.name} on {new Date(i.createdAt).toDateString()}</p>
                 <p className="text-gray-700">{i.description}</p>
               </div>
