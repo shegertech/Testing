@@ -1,0 +1,547 @@
+import React, { useState } from 'react';
+import { api } from '../services/mockStore';
+import { User, Project, ProjectStatus, CollaboratorRole } from '../types';
+import { THEMATIC_AREAS, COUNTRIES } from '../constants';
+import { Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send } from 'lucide-react';
+
+interface Props {
+  user: User;
+}
+
+type Tab = 'my-projects' | 'create' | 'portfolio' | 'detail';
+
+// --- Sub Components Defined Outside to Prevent Re-renders/Focus Loss ---
+
+const ProjectCard: React.FC<{ 
+  project: Project; 
+  user: User;
+  onSelect: (p: Project) => void; 
+  showActions?: boolean 
+}> = ({ project, user, onSelect, showActions = false }) => (
+  <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition mb-4">
+    <div className="flex justify-between items-start">
+      <div>
+        <h3 
+          className="text-lg font-bold text-gray-900 cursor-pointer hover:text-blue-600"
+          onClick={() => onSelect(project)}
+        >
+          {project.title}
+        </h3>
+        <p className="text-sm text-gray-500 mt-1">{project.thematicArea} • {project.country}</p>
+      </div>
+      {project.status === ProjectStatus.DRAFT && (
+        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">Draft</span>
+      )}
+    </div>
+    <p className="text-gray-600 mt-3 text-sm line-clamp-2">{project.description}</p>
+    
+    {showActions && (
+      <div className="mt-4 pt-4 border-t border-gray-100 flex space-x-3">
+           <button 
+              onClick={() => onSelect(project)}
+              className="text-sm text-blue-600 font-medium hover:text-blue-800"
+           >
+              Open Project Forum
+           </button>
+           {project.ownerId === user.id && (
+               <button className="text-sm text-gray-500 hover:text-gray-800">Edit</button>
+           )}
+      </div>
+    )}
+  </div>
+);
+
+interface CreateFormProps {
+  newProject: Partial<Project>;
+  setNewProject: (p: Partial<Project>) => void;
+  inviteEmails: string;
+  setInviteEmails: (s: string) => void;
+  selectedFiles: File[];
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  removeFile: (i: number) => void;
+  handleCreate: (status: ProjectStatus) => void;
+}
+
+const CreateForm: React.FC<CreateFormProps> = ({
+  newProject, setNewProject, inviteEmails, setInviteEmails, 
+  selectedFiles, onFileChange, removeFile, handleCreate
+}) => (
+  <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+    <h2 className="text-2xl font-bold mb-6 text-gray-800">Create a New Project</h2>
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Project Title *</label>
+        <input 
+          type="text" 
+          className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+          value={newProject.title}
+          onChange={e => setNewProject({...newProject, title: e.target.value})}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Description *</label>
+        <textarea 
+          rows={5}
+          className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+          value={newProject.description}
+          onChange={e => setNewProject({...newProject, description: e.target.value})}
+          placeholder="Describe the problem, objectives, and expected impact..."
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+          <div>
+              <label className="block text-sm font-medium text-gray-700">Thematic Area</label>
+              <select 
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                  value={newProject.thematicArea}
+                  onChange={e => setNewProject({...newProject, thematicArea: e.target.value})}
+              >
+                  {THEMATIC_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+          </div>
+          <div>
+              <label className="block text-sm font-medium text-gray-700">Country</label>
+              <select 
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                  value={newProject.country}
+                  onChange={e => setNewProject({...newProject, country: e.target.value})}
+              >
+                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+          </div>
+      </div>
+      <div>
+         <label className="block text-sm font-medium text-gray-700">Invite Collaborators (Emails)</label>
+         <input 
+          type="text" 
+          className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+          placeholder="email1@example.com, email2@example.com"
+          value={inviteEmails}
+          onChange={e => setInviteEmails(e.target.value)}
+        />
+      </div>
+      
+      {/* File Upload Section */}
+      <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
+              <input 
+                  type="file" 
+                  multiple 
+                  onChange={onFileChange}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <Upload className="w-10 h-10 text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
+              <p className="text-xs text-gray-500 mt-1">PDF, DOC, JPG, PNG (max 10MB)</p>
+          </div>
+
+          {selectedFiles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                  {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                          <div className="flex items-center space-x-3 overflow-hidden">
+                              {file.type.startsWith('image/') ? (
+                                  <ImageIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                              ) : (
+                                  <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                              )}
+                              <div className="truncate">
+                                  <p className="text-sm font-medium text-gray-700 truncate">{file.name}</p>
+                                  <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                              </div>
+                          </div>
+                          <button 
+                              onClick={() => removeFile(index)}
+                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition"
+                          >
+                              <X className="w-4 h-4" />
+                          </button>
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+
+      <div className="flex justify-end space-x-3 pt-4">
+          <button 
+              onClick={() => handleCreate(ProjectStatus.DRAFT)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          >
+              Save as Draft
+          </button>
+          <button 
+              onClick={() => handleCreate(ProjectStatus.SHARED)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+              Publish Project
+          </button>
+      </div>
+    </div>
+  </div>
+);
+
+const ProjectDetail: React.FC<{ 
+    project: Project; 
+    user: User; 
+    onBack: () => void 
+}> = ({ project, user, onBack }) => {
+    const owner = api.users.getById(project.ownerId);
+    const [comment, setComment] = useState('');
+    const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
+    const comments = api.comments.getByParent(project.id);
+    const isOwner = user.id === project.ownerId;
+
+    const handlePostComment = () => {
+        if(!comment) return;
+        api.comments.add({
+            id: `c${Date.now()}`,
+            parentId: project.id,
+            authorId: user.id,
+            text: comment,
+            createdAt: new Date().toISOString()
+        });
+        setComment('');
+    };
+
+    const handleInvite = () => {
+        if (!newCollaboratorEmail) return;
+        // Mock invitation logic
+        alert(`Invitation sent to ${newCollaboratorEmail}`);
+        setNewCollaboratorEmail('');
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[600px] flex flex-col lg:flex-row">
+            {/* Left Content */}
+            <div className="flex-1 p-8 border-r border-gray-100">
+                <div className="mb-6">
+                    <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-900 flex items-center mb-4">
+                        &larr; Back
+                    </button>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.title}</h1>
+                    <div className="flex items-center text-sm text-gray-500 space-x-4">
+                        <span className="flex items-center"><Users className="w-4 h-4 mr-1"/> Lead: {owner?.name}</span>
+                        <span>{new Date(project.createdAt).toLocaleDateString()}</span>
+                    </div>
+                </div>
+
+                <div className="prose max-w-none text-gray-700 mb-8">
+                    <p>{project.description}</p>
+                </div>
+
+                <div className="mb-8">
+                    <h3 className="font-bold text-gray-900 mb-3">Attachments</h3>
+                    {project.attachments.length > 0 ? (
+                        <div className="flex flex-wrap gap-3">
+                            {project.attachments.map((file, idx) => (
+                                <a 
+                                    key={idx} 
+                                    href={file.url} 
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={file.name}
+                                    className="flex items-center p-3 border rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition"
+                                >
+                                    <Download className="w-4 h-4 mr-2 text-gray-500" />
+                                    <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                                </a>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500 italic">No attachments available.</p>
+                    )}
+                </div>
+
+                <div className="pt-8 border-t border-gray-100">
+                    <h3 className="font-bold text-lg mb-4">Project Forum</h3>
+                    <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
+                        {comments.length === 0 && <p className="text-gray-400 text-sm">No comments yet. Start the discussion!</p>}
+                        {comments.map(c => {
+                             const author = api.users.getById(c.authorId);
+                             return (
+                                <div key={c.id} className="flex space-x-3">
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
+                                        {author?.name.charAt(0)}
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded-lg rounded-tl-none">
+                                        <div className="text-xs font-bold text-gray-700">{author?.name}</div>
+                                        <p className="text-sm text-gray-600">{c.text}</p>
+                                    </div>
+                                </div>
+                             )
+                        })}
+                    </div>
+                    <div className="flex space-x-2">
+                        <input 
+                            type="text"
+                            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                            placeholder="Write a comment..."
+                            value={comment}
+                            onChange={e => setComment(e.target.value)}
+                        />
+                        <button onClick={handlePostComment} className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            <Send className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Sidebar */}
+            <div className="w-full lg:w-80 p-6 bg-gray-50">
+                <div className="mb-6">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Project Details</h4>
+                    <div className="space-y-3 text-sm">
+                        <div>
+                            <span className="block text-gray-400 text-xs">Thematic Area</span>
+                            <span className="text-gray-800">{project.thematicArea}</span>
+                        </div>
+                        <div>
+                            <span className="block text-gray-400 text-xs">Location</span>
+                            <span className="text-gray-800">{project.city ? `${project.city}, ` : ''}{project.country}</span>
+                        </div>
+                        <div>
+                            <span className="block text-gray-400 text-xs">Status</span>
+                            <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">{project.status}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mb-6">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Collaborators</h4>
+                    <div className="space-y-3 mb-4">
+                        {project.collaborators.map((c, i) => {
+                             const u = api.users.getById(c.userId);
+                             return (
+                                <div key={i} className="flex items-center space-x-2">
+                                    <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs text-gray-600">
+                                        {u?.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-medium text-gray-900">{u?.name}</div>
+                                        <div className="text-xs text-gray-500">{c.role}</div>
+                                    </div>
+                                </div>
+                             );
+                        })}
+                    </div>
+                    
+                    {/* Add Collaborator Section for Owner */}
+                    {isOwner && (
+                        <div className="bg-white p-3 rounded-lg border border-dashed border-gray-300">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Invite Collaborator</h5>
+                            <div className="flex flex-col space-y-2">
+                                <input 
+                                    type="email" 
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 w-full"
+                                    placeholder="Enter email..."
+                                    value={newCollaboratorEmail}
+                                    onChange={(e) => setNewCollaboratorEmail(e.target.value)}
+                                />
+                                <button 
+                                    onClick={handleInvite}
+                                    disabled={!newCollaboratorEmail}
+                                    className="bg-blue-600 text-white text-xs py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    Invite
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isOwner && project.collaborators.every(c => c.userId !== user.id) && (
+                         <button className="mt-6 w-full py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">
+                            Request to Join
+                         </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- Main Component ---
+
+const ProjectDashboard: React.FC<Props> = ({ user }) => {
+  const [activeTab, setActiveTab] = useState<Tab>('my-projects');
+  const [subTab, setSubTab] = useState<'shared' | 'joined' | 'saved'>('shared');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Create Form State
+  const [newProject, setNewProject] = useState<Partial<Project>>({
+    title: '',
+    description: '',
+    thematicArea: THEMATIC_AREAS[0],
+    country: user.country,
+    visibility: 'Public'
+  });
+  const [inviteEmails, setInviteEmails] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  // --- Helpers ---
+  const mySharedProjects = api.projects.getAll().filter(p => p.ownerId === user.id);
+  const myJoinedProjects = api.projects.getAll().filter(p => 
+    p.collaborators.some(c => c.userId === user.id && c.role !== CollaboratorRole.OWNER)
+  );
+  // Simulating "Saved" just by taking first 2 shared projects not owned by me
+  const mySavedProjects = api.projects.getAll().filter(p => p.ownerId !== user.id).slice(0, 2); 
+  const portfolioProjects = api.projects.getAll().filter(p => p.status === ProjectStatus.SHARED && p.visibility === 'Public');
+
+  const handleCreate = (status: ProjectStatus) => {
+    // Convert files to mock attachments
+    const attachments = selectedFiles.map(file => ({
+      name: file.name,
+      url: URL.createObjectURL(file), // Mock URL
+      type: file.type,
+      size: file.size
+    }));
+
+    const project: Project = {
+      id: `p${Date.now()}`,
+      title: newProject.title!,
+      description: newProject.description!,
+      thematicArea: newProject.thematicArea!,
+      country: newProject.country!,
+      city: newProject.city || '',
+      ownerId: user.id,
+      collaborators: [{ userId: user.id, role: CollaboratorRole.OWNER, status: 'Active' }],
+      status,
+      attachments: attachments,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      joinRequests: [],
+      visibility: newProject.visibility as any,
+      commentCount: 0,
+      saveCount: 0
+    };
+    
+    // Simulate invites
+    if (inviteEmails) {
+        // In a real app, parse emails and send invites
+        console.log(`Inviting: ${inviteEmails}`);
+    }
+
+    api.projects.create(project);
+    setActiveTab('my-projects');
+    setSubTab('shared');
+    setNewProject({ title: '', description: '', thematicArea: THEMATIC_AREAS[0], country: user.country, visibility: 'Public' });
+    setInviteEmails('');
+    setSelectedFiles([]);
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSelectProject = (project: Project) => {
+      setSelectedProject(project);
+      setActiveTab('detail');
+  };
+
+  return (
+    <div>
+      {/* Sub Navigation */}
+      <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-6 inline-flex border border-gray-200">
+        <button 
+            onClick={() => setActiveTab('my-projects')}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'my-projects' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+            My Projects
+        </button>
+        <button 
+            onClick={() => setActiveTab('create')}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'create' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+            Create Project
+        </button>
+        <button 
+            onClick={() => setActiveTab('portfolio')}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'portfolio' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+            Project Portfolio
+        </button>
+      </div>
+
+      {/* Content Area */}
+      {activeTab === 'my-projects' && (
+        <div className="space-y-6">
+            <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                    <button onClick={() => setSubTab('shared')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'shared' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Shared</button>
+                    <button onClick={() => setSubTab('joined')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'joined' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Joined</button>
+                    <button onClick={() => setSubTab('saved')} className={`pb-4 px-1 border-b-2 font-medium text-sm ${subTab === 'saved' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>Saved</button>
+                </nav>
+            </div>
+            <div className="grid gap-4">
+                {subTab === 'shared' && mySharedProjects.length === 0 && <p className="text-gray-500">You haven't created any projects yet.</p>}
+                {subTab === 'shared' && mySharedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
+                
+                {subTab === 'joined' && myJoinedProjects.length === 0 && <p className="text-gray-500">You haven't joined any projects yet.</p>}
+                {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
+                
+                {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} showActions />)}
+            </div>
+        </div>
+      )}
+
+      {activeTab === 'create' && (
+        <CreateForm 
+            newProject={newProject}
+            setNewProject={setNewProject}
+            inviteEmails={inviteEmails}
+            setInviteEmails={setInviteEmails}
+            selectedFiles={selectedFiles}
+            onFileChange={onFileChange}
+            removeFile={removeFile}
+            handleCreate={handleCreate}
+        />
+      )}
+
+      {activeTab === 'portfolio' && (
+        <div className="space-y-6">
+            <div className="flex space-x-4 mb-4">
+                <div className="relative flex-1">
+                    <input 
+                        type="text" 
+                        placeholder="Search projects..." 
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
+                    <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
+                </div>
+                <select className="border border-gray-300 rounded-md px-3 text-sm">
+                    <option>All Areas</option>
+                    {THEMATIC_AREAS.map(a => <option key={a}>{a}</option>)}
+                </select>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {portfolioProjects
+                    .filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} />)
+                }
+            </div>
+        </div>
+      )}
+
+      {activeTab === 'detail' && selectedProject && (
+        <ProjectDetail 
+            project={selectedProject} 
+            user={user} 
+            onBack={() => setActiveTab('portfolio')} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default ProjectDashboard;
