@@ -1,20 +1,20 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from './services/api'; // Changed import
-import { User, UserRole } from './types';
+import { User, UserRole, Project } from './types';
 import { 
   Menu, X, User as UserIcon, LogOut, Settings, HelpCircle, 
   Home as HomeIcon, Briefcase, Lightbulb, DollarSign, ShieldCheck 
 } from 'lucide-react';
 import AuthFlow from './components/AuthFlow';
 import HomeFeed from './components/HomeFeed';
-import ProjectDashboard from './components/ProjectDashboard';
+import ProjectDashboard, { DashboardTab } from './components/ProjectDashboard';
 import InsightsDashboard from './components/InsightsDashboard';
 import FundingDashboard from './components/FundingDashboard';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import AdminDashboard from './components/AdminDashboard';
 import { AboutView, PrivacyView, TermsView, HelpView, ContactView, GuidelinesView } from './components/StaticPages';
+import NotificationDropdown from './components/NotificationDropdown';
 
 // Simple router states
 type View = 'auth' | 'home' | 'projects' | 'insights' | 'funding' | 'profile' | 'settings' | 'admin' | 'about' | 'privacy' | 'terms' | 'help' | 'contact' | 'guidelines';
@@ -25,26 +25,36 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // State for Navigation Parameters (Deep linking to project details)
+  const [targetProject, setTargetProject] = useState<Project | null>(null);
+  const [targetTab, setTargetTab] = useState<DashboardTab>('my-projects');
 
   useEffect(() => {
-    // Async check for user
-    const checkUser = async () => {
-      try {
-        const storedUser = await api.users.getCurrentUser();
-        if (storedUser) {
-          setUser(storedUser);
-          setCurrentView('home');
+    // REAL-TIME LISTENER:
+    // This subscribes to changes on the user document in Firestore.
+    // If Admin changes role, 'updatedUser' will have the new role immediately.
+    const unsubscribe = api.users.listenToCurrentUser((updatedUser) => {
+        if (updatedUser) {
+            setUser(updatedUser);
+            // If we were in auth view (loading), go to home
+            if (currentView === 'auth') {
+                 setCurrentView('home');
+            }
+        } else {
+            setUser(null);
+            setCurrentView('auth');
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
         setLoading(false);
-      }
-    };
-    checkUser();
-  }, []);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
 
   const handleLogin = (u: User) => {
+    // Optimistic set, but the listener above will confirm it
     setUser(u);
     api.users.setCurrentUser(u.id); // For mock store persistence
     setCurrentView('home');
@@ -58,6 +68,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = (updatedUser: User) => {
+    // Optimistic update
     setUser(updatedUser);
     // Don't need to call setCurrentUser here usually, but good for sync
     api.users.setCurrentUser(updatedUser.id);
@@ -65,6 +76,11 @@ const App: React.FC = () => {
 
   // Allow profile view to navigate to Admin
   const handleNavigate = (view: View) => {
+    if (view === 'projects') {
+        // Reset navigation params when clicking "Projects" in nav menu
+        setTargetProject(null);
+        setTargetTab('my-projects');
+    }
     setCurrentView(view);
     setIsMobileMenuOpen(false);
   }
@@ -114,9 +130,13 @@ const App: React.FC = () => {
             </div>
 
             {/* Right Side: Profile & Mobile Toggle */}
-            <div className="flex items-center">
+            <div className="flex items-center space-x-2">
+              
+              {/* Notifications */}
+              <NotificationDropdown user={user} />
+
               {/* Profile Dropdown */}
-              <div className="relative ml-3">
+              <div className="relative ml-2">
                 <div>
                   <button
                     onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
@@ -168,7 +188,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Mobile menu button */}
-              <div className="-mr-2 flex items-center sm:hidden ml-4">
+              <div className="-mr-2 flex items-center sm:hidden ml-2">
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none"
@@ -195,8 +215,29 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'home' && <HomeFeed user={user} onViewProject={() => setCurrentView('projects')} />}
-        {currentView === 'projects' && <ProjectDashboard user={user} />}
+        {currentView === 'home' && (
+            <HomeFeed 
+                user={user} 
+                onViewProject={(p) => {
+                    setTargetProject(p);
+                    setTargetTab('detail');
+                    setCurrentView('projects');
+                }}
+                onCreateProject={() => {
+                    setTargetProject(null);
+                    setTargetTab('create');
+                    setCurrentView('projects');
+                }}
+            />
+        )}
+        {currentView === 'projects' && (
+            <ProjectDashboard 
+                user={user} 
+                onUpdateUser={handleUpdateUser} 
+                initialProject={targetProject}
+                initialTab={targetTab}
+            />
+        )}
         {currentView === 'insights' && <InsightsDashboard user={user} />}
         {currentView === 'funding' && <FundingDashboard user={user} />}
         {currentView === 'profile' && <ProfileView user={user} />}

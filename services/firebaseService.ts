@@ -1,7 +1,7 @@
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/firestore";
-import { User, Project, Insight, FundingOpportunity, Comment, UserRole } from '../types';
+import { User, Project, Insight, FundingOpportunity, Comment, UserRole, AppNotification } from '../types';
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
 const firebaseConfig = {
@@ -130,12 +130,9 @@ export const firebaseApi = {
                 const docSnap = await db.collection('users').doc(fbUser.uid).get();
                 if (docSnap.exists) {
                     const userData = docSnap.data() as User;
-                    
-                    // --- ADMIN OVERRIDE ---
                     if (ADMIN_EMAILS.includes(userData.email.toLowerCase())) {
                         userData.role = UserRole.ADMIN;
                     }
-                    
                     resolve(userData);
                 } else {
                     resolve(null);
@@ -150,6 +147,40 @@ export const firebaseApi = {
     setCurrentUser: async (id: string | null) => {
        if (!auth) return;
        if (!id) await auth.signOut();
+    },
+    // NEW: Real-time listener for current user data
+    listenToCurrentUser: (callback: (user: User | null) => void) => {
+        let unsubscribeDoc: (() => void) | undefined;
+        
+        const unsubscribeAuth = auth.onAuthStateChanged((fbUser) => {
+            // Clean up old doc listener if user changed
+            if (unsubscribeDoc) {
+                unsubscribeDoc();
+                unsubscribeDoc = undefined;
+            }
+
+            if (fbUser) {
+                unsubscribeDoc = db.collection('users').doc(fbUser.uid).onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const userData = doc.data() as User;
+                        if (ADMIN_EMAILS.includes(userData.email.toLowerCase())) {
+                            userData.role = UserRole.ADMIN;
+                        }
+                        callback(userData);
+                    } else {
+                        callback(null);
+                    }
+                });
+            } else {
+                callback(null);
+            }
+        });
+
+        // Return a function to unsubscribe from both
+        return () => {
+            unsubscribeAuth();
+            if (unsubscribeDoc) unsubscribeDoc();
+        };
     }
   },
 
@@ -170,7 +201,7 @@ export const firebaseApi = {
       await db.collection('projects').doc(project.id).set(project, { merge: true });
     },
     delete: async (id: string) => {
-      if (!db) return;
+      if (!db) throw new Error("Database connection failed");
       await db.collection('projects').doc(id).delete();
     }
   },
@@ -191,7 +222,7 @@ export const firebaseApi = {
         await db.collection('insights').doc(insight.id).set(insight, { merge: true });
     },
     delete: async (id: string) => {
-        if (!db) return;
+        if (!db) throw new Error("Database connection failed");
         await db.collection('insights').doc(id).delete();
     }
   },
@@ -212,7 +243,7 @@ export const firebaseApi = {
         await db.collection('funding').doc(opp.id).set(opp, { merge: true });
     },
     delete: async (id: string) => {
-        if (!db) return;
+        if (!db) throw new Error("Database connection failed");
         await db.collection('funding').doc(id).delete();
     }
   },
@@ -228,5 +259,31 @@ export const firebaseApi = {
       await db.collection('comments').doc(comment.id).set(comment);
       return comment;
     }
+  },
+
+  notifications: {
+      getByUser: async (userId: string) => {
+          if (!db) return [];
+          // Changed: Removed .orderBy('createdAt', 'desc') to avoid needing a composite index in Firestore.
+          // Sorting is now done client-side.
+          const snapshot = await db.collection('notifications')
+              .where('recipientId', '==', userId)
+              .get();
+          
+          const list = snapshot.docs.map(d => d.data() as AppNotification);
+          // Client-side sort descending
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          
+          return list.slice(0, 20); // Limit to 20 after sort
+      },
+      create: async (n: AppNotification) => {
+          if (!db) return n;
+          await db.collection('notifications').doc(n.id).set(n);
+          return n;
+      },
+      markAsRead: async (id: string) => {
+          if (!db) return;
+          await db.collection('notifications').doc(id).update({ isRead: true });
+      }
   }
 };

@@ -10,7 +10,7 @@ export const AboutView: React.FC = () => (
     
     <div className="prose max-w-none text-gray-700 space-y-6">
       <p className="text-lg leading-relaxed">
-        <span className="font-bold text-blue-600">Ponsectors</span> is a pioneering digital ecosystem designed to bridge the gap between isolated sectors. We believe that the world's most pressing challenges—from climate change to economic inequality—cannot be solved in silos.
+        <span className="font-bold text-blue-600">Ponsectors</span> is a pioneering digital ecosystem designed to bridge the gap between isolated sectors. We believe that the world's most pressing challenges, from climate change to economic inequality, cannot be solved in silos.
       </p>
       
       <div className="grid md:grid-cols-3 gap-6 my-8">
@@ -164,8 +164,8 @@ export const ContactView: React.FC = () => (
                </div>
                <div>
                  <h3 className="font-bold text-gray-900">Email Us</h3>
-                 <p className="text-gray-600 text-sm">support@ponsectors.com</p>
-                 <p className="text-gray-600 text-sm">partners@ponsectors.com</p>
+                 <p className="text-gray-600 text-sm">info@ponsectors.com</p>
+            
                </div>
             </div>
 
@@ -248,7 +248,7 @@ export const GuidelinesView: React.FC = () => (
          Our admin team reviews all reported content. Violations of these guidelines may result in content removal, temporary suspension, or permanent account termination.
        </p>
        <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800">
-         If you see something that violates these rules, please use the "Report" feature or contact support immediately.
+         If you see something that violates these rules, contact support immediately.
        </div>
     </div>
   </div>

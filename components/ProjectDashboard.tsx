@@ -3,37 +3,151 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment } from '../types';
 import { THEMATIC_AREAS, COUNTRIES } from '../constants';
-import { Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, MessageSquare, Share2, UserPlus, Clock, AlertCircle, Loader, Bookmark, Edit } from 'lucide-react';
+import { 
+  Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, 
+  MessageSquare, Share2, UserPlus, Clock, AlertCircle, Loader, Bookmark, Edit,
+  Facebook, Twitter, Linkedin, Link, Copy, MessageCircle, Instagram, CheckCircle, Trash2
+} from 'lucide-react';
+
+export type DashboardTab = 'my-projects' | 'create' | 'portfolio' | 'detail';
 
 interface Props {
   user: User;
   onUpdateUser?: (u: User) => void;
+  initialProject?: Project | null;
+  initialTab?: DashboardTab;
 }
 
-type Tab = 'my-projects' | 'create' | 'portfolio' | 'detail';
-
 // --- Sub Components ---
+
+const ShareModal: React.FC<{ project: Project; onClose: () => void }> = ({ project, onClose }) => {
+  // Use current origin + dummy param for demo purposes since we don't have real routing
+  const url = `${window.location.origin}?project=${project.id}`;
+  const text = `Check out this project on Ponsectors: ${project.title}`;
+  
+  const shareLinks = [
+    { 
+      name: 'Facebook', 
+      icon: Facebook, 
+      color: 'text-blue-600', 
+      bg: 'bg-blue-50',
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` 
+    },
+    { 
+      name: 'X', 
+      icon: Twitter, 
+      color: 'text-black', 
+      bg: 'bg-gray-100',
+      href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}` 
+    },
+    { 
+      name: 'LinkedIn', 
+      icon: Linkedin, 
+      color: 'text-blue-700', 
+      bg: 'bg-blue-50',
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}` 
+    },
+    { 
+      name: 'WhatsApp', 
+      icon: MessageCircle, 
+      color: 'text-green-500', 
+      bg: 'bg-green-50',
+      href: `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}` 
+    },
+    { 
+      name: 'Telegram', 
+      icon: Send, 
+      color: 'text-blue-500', 
+      bg: 'bg-blue-50',
+      href: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}` 
+    }
+  ];
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url);
+    alert('Link copied to clipboard!');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl transform transition-all" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-bold text-gray-900">Share Project</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {shareLinks.map((link) => (
+            <a 
+              key={link.name}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`flex flex-col items-center justify-center p-3 rounded-xl hover:opacity-80 transition ${link.bg}`}
+            >
+              <link.icon className={`w-6 h-6 ${link.color} mb-2`} />
+              <span className="text-xs font-medium text-gray-700">{link.name}</span>
+            </a>
+          ))}
+          {/* Instagram Button (Manual Copy mostly) */}
+          <button 
+             onClick={handleCopy}
+             className="flex flex-col items-center justify-center p-3 rounded-xl hover:opacity-80 transition bg-pink-50"
+          >
+             <Instagram className="w-6 h-6 text-pink-600 mb-2" />
+             <span className="text-xs font-medium text-gray-700">Instagram</span>
+          </button>
+        </div>
+
+        <div className="relative">
+           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+             <Link className="h-4 w-4 text-gray-400" />
+           </div>
+           <input 
+             type="text" 
+             readOnly 
+             value={url} 
+             className="block w-full pl-9 pr-12 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg bg-gray-50" 
+           />
+           <button 
+             onClick={handleCopy}
+             className="absolute inset-y-0 right-0 px-3 flex items-center border-l border-gray-200 text-gray-500 hover:text-blue-600"
+           >
+             <Copy className="h-4 w-4" />
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ProjectCard: React.FC<{ 
   project: Project; 
   user: User;
   onSelect: (p: Project) => void; 
   onEdit: (p: Project) => void;
+  onShare: (p: Project) => void;
+  onDelete?: (p: Project) => void;
   showActions?: boolean 
-}> = ({ project, user, onSelect, onEdit, showActions = false }) => {
+}> = ({ project, user, onSelect, onEdit, onShare, onDelete, showActions = false }) => {
   const isOwner = project.ownerId === user.id;
   const isCollaborator = project.collaborators.some(c => c.userId === user.id);
+  // Allow Edit if Owner OR Collaborator
+  const canEdit = isOwner || isCollaborator;
+  
   const showJoin = !isOwner && !isCollaborator;
-
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    alert(`Share link copied for project: ${project.title}`);
-  };
 
   const handleJoin = (e: React.MouseEvent) => {
     e.stopPropagation();
     alert(`Request to join sent for project: ${project.title}`);
   };
+
+  const handleShareClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onShare(project);
+  }
 
   return (
     <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition mb-4 flex flex-col h-full relative">
@@ -77,7 +191,7 @@ const ProjectCard: React.FC<{
                   <span>{project.commentCount}</span>
                </button>
                <button 
-                  onClick={handleShare}
+                  onClick={handleShareClick}
                   className="flex items-center text-gray-500 hover:text-blue-600 text-xs sm:text-sm transition"
                   title="Share Project"
                >
@@ -96,12 +210,21 @@ const ProjectCard: React.FC<{
                       Request to Join
                    </button>
                 )}
-                {isOwner && (
+                {canEdit && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onEdit(project); }} 
-                        className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 px-2"
+                        className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 px-2 flex items-center"
                     >
-                        Edit
+                        <Edit className="w-3 h-3 mr-1" /> Edit
+                    </button>
+                )}
+                {isOwner && onDelete && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDelete(project); }} 
+                        className="text-xs sm:text-sm text-gray-400 hover:text-red-600 px-2 flex items-center"
+                        title="Delete Project"
+                    >
+                        <Trash2 className="w-3 h-3" />
                     </button>
                 )}
              </div>
@@ -286,14 +409,22 @@ const ProjectDetail: React.FC<{
     onBack: () => void;
     onUpdateUser?: (u: User) => void;
     onEdit: (p: Project) => void;
-}> = ({ project, user, onBack, onUpdateUser, onEdit }) => {
+    onShare: (p: Project) => void;
+    onDelete?: (p: Project) => void;
+    onRefresh: () => void; // Trigger refresh to update list
+}> = ({ project, user, onBack, onUpdateUser, onEdit, onShare, onDelete, onRefresh }) => {
     const [owner, setOwner] = useState<User | null>(null);
     const [comment, setComment] = useState('');
     const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
     const [comments, setComments] = useState<Comment[]>([]);
     const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+    const [inviteStatus, setInviteStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [inviteMsg, setInviteMsg] = useState('');
     
     const isOwner = user.id === project.ownerId;
+    const isCollaborator = project.collaborators.some(c => c.userId === user.id);
+    const canEdit = isOwner || isCollaborator;
+
     const isSaved = user.savedProjectIds?.includes(project.id);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -337,10 +468,50 @@ const ProjectDetail: React.FC<{
         setComment('');
     };
 
-    const handleInvite = () => {
+    const handleInvite = async () => {
         if (!newCollaboratorEmail) return;
-        alert(`Invitation sent to ${newCollaboratorEmail}`);
-        setNewCollaboratorEmail('');
+        setInviteStatus('loading');
+        
+        try {
+            // 1. Find the user by email
+            const allUsers = await api.users.getAll();
+            const foundUser = allUsers.find(u => u.email.toLowerCase() === newCollaboratorEmail.toLowerCase());
+
+            if (!foundUser) {
+                setInviteStatus('error');
+                setInviteMsg('User not found. They must be registered first.');
+                return;
+            }
+
+            if (project.collaborators.some(c => c.userId === foundUser.id)) {
+                setInviteStatus('error');
+                setInviteMsg('User is already a collaborator.');
+                return;
+            }
+
+            // 2. Add to project
+            const updatedProject = {
+                ...project,
+                collaborators: [
+                    ...project.collaborators,
+                    { userId: foundUser.id, role: CollaboratorRole.COLLABORATOR, status: 'Active' as const }
+                ]
+            };
+
+            await api.projects.update(updatedProject);
+            
+            setInviteStatus('success');
+            setInviteMsg('Collaborator added!');
+            setNewCollaboratorEmail('');
+            
+            // 3. Refresh Parent View to show updated list immediately
+            onRefresh();
+
+        } catch (e) {
+            console.error(e);
+            setInviteStatus('error');
+            setInviteMsg('Failed to add collaborator.');
+        }
     };
 
     const handleToggleSave = async () => {
@@ -353,6 +524,12 @@ const ProjectDetail: React.FC<{
             console.error(e);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (onDelete) {
+            onDelete(project);
         }
     };
 
@@ -385,13 +562,29 @@ const ProjectDetail: React.FC<{
                             >
                                 <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
                             </button>
-                            {isOwner && (
+                            <button 
+                                onClick={() => onShare(project)}
+                                className="p-2 rounded-full border bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 transition"
+                                title="Share Project"
+                            >
+                                <Share2 className="w-5 h-5" />
+                            </button>
+                            {canEdit && (
                                 <button 
                                     onClick={() => onEdit(project)}
                                     className="p-2 rounded-full border bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 transition"
                                     title="Edit Project"
                                 >
                                     <Edit className="w-5 h-5" />
+                                </button>
+                            )}
+                            {isOwner && onDelete && (
+                                <button 
+                                    onClick={handleDelete}
+                                    className="p-2 rounded-full border bg-white border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 transition"
+                                    title="Delete Project"
+                                >
+                                    <Trash2 className="w-5 h-5" />
                                 </button>
                             )}
                         </div>
@@ -494,7 +687,7 @@ const ProjectDetail: React.FC<{
                              const name = usersMap[c.userId] || (c.userId === user.id ? user.name : 'Unknown');
                              return (
                                 <div key={i} className="flex items-center space-x-2">
-                                    <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs text-gray-600">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs border ${c.role === CollaboratorRole.OWNER ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-white border-gray-200 text-gray-600'}`}>
                                         {name.charAt(0)}
                                     </div>
                                     <div>
@@ -506,7 +699,7 @@ const ProjectDetail: React.FC<{
                         })}
                     </div>
                     
-                    {/* Add Collaborator Section for Owner */}
+                    {/* Add Collaborator Section for Owner OR Existing Collaborators (if policy allows, currently limited to Owner for inviting) */}
                     {isOwner && (
                         <div className="bg-white p-3 rounded-lg border border-dashed border-gray-300">
                             <h5 className="text-xs font-semibold text-gray-700 mb-2">Invite Collaborator</h5>
@@ -514,16 +707,21 @@ const ProjectDetail: React.FC<{
                                 <input 
                                     type="email" 
                                     className="text-xs border border-gray-300 rounded px-2 py-1 w-full"
-                                    placeholder="Enter email..."
+                                    placeholder="Enter user email..."
                                     value={newCollaboratorEmail}
-                                    onChange={(e) => setNewCollaboratorEmail(e.target.value)}
+                                    onChange={(e) => { setNewCollaboratorEmail(e.target.value); setInviteMsg(''); setInviteStatus('idle'); }}
                                 />
+                                {inviteMsg && (
+                                    <p className={`text-xs ${inviteStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                                        {inviteMsg}
+                                    </p>
+                                )}
                                 <button 
                                     onClick={handleInvite}
-                                    disabled={!newCollaboratorEmail}
-                                    className="bg-blue-600 text-white text-xs py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+                                    disabled={!newCollaboratorEmail || inviteStatus === 'loading'}
+                                    className="bg-blue-600 text-white text-xs py-1 rounded hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center"
                                 >
-                                    Invite
+                                    {inviteStatus === 'loading' ? <Loader className="w-3 h-3 animate-spin"/> : 'Add to Project'}
                                 </button>
                             </div>
                         </div>
@@ -543,11 +741,12 @@ const ProjectDetail: React.FC<{
 
 // --- Main Component ---
 
-const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('my-projects');
+const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject, initialTab }) => {
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab || (initialProject ? 'detail' : 'my-projects'));
   const [subTab, setSubTab] = useState<'shared' | 'joined' | 'saved'>('shared');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject || null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sharingProject, setSharingProject] = useState<Project | null>(null);
   
   // Data State
   const [projects, setProjects] = useState<Project[]>([]);
@@ -574,6 +773,11 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
       setLoading(true);
       const all = await api.projects.getAll();
       setProjects(all);
+      // If we are viewing a specific project, update its data reference
+      if (selectedProject) {
+          const updated = all.find(p => p.id === selectedProject.id);
+          if (updated) setSelectedProject(updated);
+      }
       setLoading(false);
   };
 
@@ -610,7 +814,9 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
       thematicArea: newProject.thematicArea!,
       country: newProject.country!,
       city: newProject.city || '',
-      ownerId: user.id,
+      // Critical: Preserve original owner if editing, else use current user
+      ownerId: newProject.ownerId || user.id,
+      // Critical: Preserve existing collaborators if editing
       collaborators: newProject.collaborators || [{ userId: user.id, role: CollaboratorRole.OWNER, status: 'Active' }],
       status: status, // Update status
       attachments: finalAttachments,
@@ -678,8 +884,30 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
       setActiveTab('create');
   };
 
+  const handleShareProject = (project: Project) => {
+      setSharingProject(project);
+  }
+
+  const handleDeleteProject = async (project: Project) => {
+      if (confirm(`Are you sure you want to delete "${project.title}"? This action cannot be undone.`)) {
+          try {
+              await api.projects.delete(project.id);
+              alert("Project deleted.");
+              setSelectedProject(null);
+              setActiveTab('my-projects');
+              fetchProjects();
+          } catch (e) {
+              console.error(e);
+              alert("Failed to delete project.");
+          }
+      }
+  }
+
   return (
     <div>
+      {/* Share Modal */}
+      {sharingProject && <ShareModal project={sharingProject} onClose={() => setSharingProject(null)} />}
+
       {/* Sub Navigation */}
       <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-6 inline-flex border border-gray-200">
         <button 
@@ -718,13 +946,13 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
                     </div>
                     <div className="grid gap-4">
                         {subTab === 'shared' && mySharedProjects.length === 0 && <p className="text-gray-500">You haven't created any projects yet.</p>}
-                        {subTab === 'shared' && mySharedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                        {subTab === 'shared' && mySharedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} showActions />)}
                         
                         {subTab === 'joined' && myJoinedProjects.length === 0 && <p className="text-gray-500">You haven't joined any projects yet.</p>}
-                        {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                        {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} showActions />)}
                         
                         {subTab === 'saved' && mySavedProjects.length === 0 && <p className="text-gray-500">You haven't saved any projects yet.</p>}
-                        {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)}
+                        {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} showActions />)}
                     </div>
                 </div>
             )}
@@ -766,7 +994,7 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {portfolioProjects
                             .filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} showActions />)
+                            .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} showActions />)
                         }
                     </div>
                 </div>
@@ -779,6 +1007,9 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser }) => {
                     onBack={() => setActiveTab('portfolio')}
                     onUpdateUser={onUpdateUser}
                     onEdit={handleEditProject}
+                    onShare={handleShareProject}
+                    onDelete={handleDeleteProject}
+                    onRefresh={fetchProjects}
                 />
             )}
           </>

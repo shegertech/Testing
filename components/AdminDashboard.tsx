@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { Project, Insight, FundingOpportunity, ProjectStatus, User, UserRole, CollaboratorRole } from '../types';
@@ -171,12 +170,25 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleUpdateUserRole = async (userId: string, newRole: UserRole) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      if (confirm(`Change role of ${user.name} to ${newRole}?`)) {
-        await api.users.update({ ...user, role: newRole });
-        fetchData();
-      }
+    const userToUpdate = users.find(u => u.id === userId);
+    if (!userToUpdate) return;
+    
+    if (confirm(`Change role of ${userToUpdate.name} to ${newRole}?`)) {
+        try {
+            // Optimistic Update in UI
+            const updatedUsers = users.map(u => 
+                u.id === userId ? { ...u, role: newRole } : u
+            );
+            setUsers(updatedUsers);
+
+            // API Call
+            await api.users.update({ ...userToUpdate, role: newRole });
+            alert("Role updated successfully!");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update role.");
+            fetchData(); // Revert on failure
+        }
     }
   };
 

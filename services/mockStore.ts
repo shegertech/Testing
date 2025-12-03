@@ -156,7 +156,9 @@ export const mockApi = {
       const users = get<User>(USERS_KEY);
       const idx = users.findIndex(u => u.id === user.id);
       if (idx !== -1) {
-        users[idx] = user;
+        // preserve passwordHash if not provided in update
+        const existing = users[idx];
+        users[idx] = { ...existing, ...user, passwordHash: user.passwordHash || existing.passwordHash };
         set(USERS_KEY, users);
       }
     },
@@ -191,6 +193,18 @@ export const mockApi = {
     setCurrentUser: async (id: string | null) => {
       if (id) localStorage.setItem(CURRENT_USER_KEY, id);
       else localStorage.removeItem(CURRENT_USER_KEY);
+    },
+    listenToCurrentUser: (callback: (user: User | null) => void) => {
+        // Mock implementation: just call it once. 
+        // Real-time updates not supported in mock mode without complex eventing.
+        const id = localStorage.getItem(CURRENT_USER_KEY);
+        if (id) {
+            const user = get<User>(USERS_KEY).find(u => u.id === id) || null;
+            callback(user);
+        } else {
+            callback(null);
+        }
+        return () => {}; // no-op unsubscribe
     }
   },
 
@@ -280,5 +294,14 @@ export const mockApi = {
       set(COMMENTS_KEY, all);
       return comment;
     }
+  },
+
+  notifications: {
+      getByUser: async (userId: string) => {
+          // Mock
+          return [];
+      },
+      create: async (n: any) => { return n; },
+      markAsRead: async (id: string) => {}
   }
 };

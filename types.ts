@@ -1,3 +1,4 @@
+
 export enum StakeholderType {
   INDIVIDUAL = 'Individual',
   ORGANIZATION = 'Organization',
@@ -102,4 +103,24 @@ export interface Comment {
   authorId: string;
   text: string;
   createdAt: string;
+}
+
+export enum NotificationType {
+  PROJECT_INVITE = 'PROJECT_INVITE',
+  JOIN_REQUEST = 'JOIN_REQUEST',
+  SYSTEM = 'SYSTEM'
+}
+
+export interface AppNotification {
+  id: string;
+  recipientId: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  type: NotificationType;
+  senderId?: string;
+  senderName?: string;
+  relatedId?: string;
+  link?: string;
 }
