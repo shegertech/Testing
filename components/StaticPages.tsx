@@ -130,7 +130,7 @@ export const TermsView: React.FC = () => (
       <section>
         <h2 className="text-xl font-bold text-gray-800 mb-2">5. Contact</h2>
         <p>
-          Questions about these Terms? Contact us at <span className="text-blue-600">legal@ponsectors.com</span>.
+          Questions about these Terms? Contact us at <span className="text-blue-600">info@ponsectors.com</span>.
         </p>
       </section>
     </div>

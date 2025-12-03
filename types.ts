@@ -103,6 +103,7 @@ export interface Comment {
   authorId: string;
   text: string;
   createdAt: string;
+  replyToId?: string; // ID of the comment being replied to
 }
 
 export enum NotificationType {

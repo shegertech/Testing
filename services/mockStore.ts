@@ -1,3 +1,4 @@
+
 import { User, Project, Insight, FundingOpportunity, Comment, StakeholderType, UserRole, ProjectStatus, CollaboratorRole } from '../types';
 
 const USERS_KEY = 'ponsectors_users';
@@ -293,6 +294,11 @@ export const mockApi = {
       all.push(comment);
       set(COMMENTS_KEY, all);
       return comment;
+    },
+    delete: async (id: string) => {
+      await delay(200);
+      // Naive implementation: just delete the comment. Replies become orphaned or handled by UI logic.
+      set(COMMENTS_KEY, get<Comment>(COMMENTS_KEY).filter(c => c.id !== id));
     }
   },
 
@@ -303,9 +309,6 @@ export const mockApi = {
       },
       create: async (n: any) => { return n; },
       markAsRead: async (id: string) => {},
-      listenToUserNotifications: (userId: string, callback: (notifications: any[]) => void) => {
-          callback([]);
-          return () => {};
-      }
+      listenToNotifications: (userId: string, cb: any) => { return () => {}; }
   }
 };

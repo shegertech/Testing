@@ -1,12 +1,13 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment, NotificationType } from '../types';
+import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment } from '../types';
 import { THEMATIC_AREAS, COUNTRIES } from '../constants';
 import { 
   Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, 
   MessageSquare, Share2, UserPlus, Clock, AlertCircle, Loader, Bookmark, Edit,
-  Facebook, Twitter, Linkedin, Link, Copy, MessageCircle, Instagram, CheckCircle, Trash2
+  Facebook, Twitter, Linkedin, Link, Copy, MessageCircle, Instagram, CheckCircle, Trash2, CornerDownRight
 } from 'lucide-react';
 
 export type DashboardTab = 'my-projects' | 'create' | 'portfolio' | 'detail';
@@ -21,7 +22,6 @@ interface Props {
 // --- Sub Components ---
 
 const ShareModal: React.FC<{ project: Project; onClose: () => void }> = ({ project, onClose }) => {
-  // Use current origin + dummy param for demo purposes since we don't have real routing
   const url = `${window.location.origin}?project=${project.id}`;
   const text = `Check out this project on Ponsectors: ${project.title}`;
   
@@ -91,7 +91,6 @@ const ShareModal: React.FC<{ project: Project; onClose: () => void }> = ({ proje
               <span className="text-xs font-medium text-gray-700">{link.name}</span>
             </a>
           ))}
-          {/* Instagram Button (Manual Copy mostly) */}
           <button 
              onClick={handleCopy}
              className="flex flex-col items-center justify-center p-3 rounded-xl hover:opacity-80 transition bg-pink-50"
@@ -123,51 +122,27 @@ const ShareModal: React.FC<{ project: Project; onClose: () => void }> = ({ proje
   );
 };
 
-const ProjectCard: React.FC<{
-  project: Project;
+const ProjectCard: React.FC<{ 
+  project: Project; 
   user: User;
-  onSelect: (p: Project) => void;
+  onSelect: (p: Project) => void; 
   onEdit: (p: Project) => void;
   onShare: (p: Project) => void;
   onDelete?: (p: Project) => void;
-  showActions?: boolean
-}> = ({ project, user, onSelect, onEdit, onShare, onDelete, showActions = false }) => {
+  onRequestJoin?: (p: Project) => void;
+  showActions?: boolean 
+}> = ({ project, user, onSelect, onEdit, onShare, onDelete, onRequestJoin, showActions = false }) => {
   const isOwner = project.ownerId === user.id;
   const isCollaborator = project.collaborators.some(c => c.userId === user.id);
   // Allow Edit if Owner OR Collaborator
   const canEdit = isOwner || isCollaborator;
-
+  
   const showJoin = !isOwner && !isCollaborator;
+  const hasRequested = project.joinRequests?.includes(user.id);
 
-  const handleJoin = async (e: React.MouseEvent) => {
+  const handleJoin = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      // Add join request to project
-      const updatedProject = {
-        ...project,
-        joinRequests: [...(project.joinRequests || []), user.id]
-      };
-      await api.projects.update(updatedProject);
-
-      // Create notification for project owner
-      await api.notifications.create({
-        id: `n${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        recipientId: project.ownerId,
-        title: 'New Join Request',
-        message: `${user.name} requested to join your project "${project.title}"`,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-        type: NotificationType.JOIN_REQUEST,
-        senderId: user.id,
-        senderName: user.name,
-        relatedId: project.id
-      });
-
-      alert('Request sent successfully!');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to send join request. Please try again.');
-    }
+    if (onRequestJoin) onRequestJoin(project);
   };
 
   const handleShareClick = (e: React.MouseEvent) => {
@@ -230,10 +205,15 @@ const ProjectCard: React.FC<{
                 {showJoin && (
                    <button 
                       onClick={handleJoin}
-                      className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md text-xs sm:text-sm font-medium hover:bg-blue-100 transition whitespace-nowrap"
+                      disabled={hasRequested}
+                      className={`flex items-center px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                          hasRequested 
+                          ? 'bg-green-50 text-green-600 cursor-not-allowed' 
+                          : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                      }`}
                    >
-                      <UserPlus className="w-4 h-4 mr-1.5" />
-                      Request to Join
+                      {hasRequested ? <CheckCircle className="w-4 h-4 mr-1.5" /> : <UserPlus className="w-4 h-4 mr-1.5" />}
+                      {hasRequested ? 'Request Sent' : 'Request to Join'}
                    </button>
                 )}
                 {canEdit && (
@@ -429,6 +409,111 @@ const CreateForm: React.FC<CreateFormProps> = ({
   </div>
 );
 
+// --- Comment Component ---
+const CommentItem: React.FC<{
+    comment: Comment;
+    allComments: Comment[];
+    usersMap: Record<string, string>;
+    currentUserId: string;
+    isProjectOwner: boolean;
+    onReply: (parentId: string, text: string) => void;
+    onDelete: (id: string) => void;
+}> = ({ comment, allComments, usersMap, currentUserId, isProjectOwner, onReply, onDelete }) => {
+    const [isReplying, setIsReplying] = useState(false);
+    const [replyText, setReplyText] = useState('');
+    
+    // Find replies to this comment
+    const replies = allComments.filter(c => c.replyToId === comment.id);
+    const authorName = usersMap[comment.authorId] || 'Unknown';
+    const canDelete = currentUserId === comment.authorId || isProjectOwner;
+
+    const handleSubmitReply = () => {
+        if (!replyText.trim()) return;
+        onReply(comment.id, replyText);
+        setReplyText('');
+        setIsReplying(false);
+    };
+
+    return (
+        <div className="flex space-x-3 mb-4">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
+                {authorName.charAt(0)}
+            </div>
+            <div className="flex-1">
+                <div className="bg-gray-50 p-3 rounded-lg rounded-tl-none relative group">
+                    <div className="flex justify-between items-start">
+                        <div className="text-xs font-bold text-gray-700 mb-1">{authorName}</div>
+                        <div className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</div>
+                    </div>
+                    <p className="text-sm text-gray-600">{comment.text}</p>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3 mt-2">
+                        <button 
+                            onClick={() => setIsReplying(!isReplying)}
+                            className="text-xs text-gray-500 hover:text-blue-600 font-medium flex items-center"
+                        >
+                            <CornerDownRight className="w-3 h-3 mr-1" /> Reply
+                        </button>
+                        {canDelete && (
+                            <button 
+                                onClick={() => onDelete(comment.id)}
+                                className="text-xs text-gray-400 hover:text-red-600 flex items-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <Trash2 className="w-3 h-3 mr-1" /> Delete
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Reply Input */}
+                {isReplying && (
+                    <div className="mt-2 flex space-x-2">
+                        <input 
+                            type="text" 
+                            className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-sm"
+                            placeholder={`Reply to ${authorName}...`}
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            autoFocus
+                        />
+                        <button 
+                            onClick={handleSubmitReply}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium"
+                        >
+                            Reply
+                        </button>
+                        <button 
+                            onClick={() => setIsReplying(false)}
+                            className="px-2 py-1 text-gray-500 text-xs"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                )}
+
+                {/* Recursively render replies */}
+                {replies.length > 0 && (
+                    <div className="mt-3 pl-4 border-l-2 border-gray-100 space-y-3">
+                        {replies.map(reply => (
+                            <CommentItem 
+                                key={reply.id} 
+                                comment={reply} 
+                                allComments={allComments}
+                                usersMap={usersMap}
+                                currentUserId={currentUserId}
+                                isProjectOwner={isProjectOwner}
+                                onReply={onReply}
+                                onDelete={onDelete}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const ProjectDetail: React.FC<{ 
     project: Project; 
     user: User; 
@@ -437,8 +522,9 @@ const ProjectDetail: React.FC<{
     onEdit: (p: Project) => void;
     onShare: (p: Project) => void;
     onDelete?: (p: Project) => void;
-    onRefresh: () => void; // Trigger refresh to update list
-}> = ({ project, user, onBack, onUpdateUser, onEdit, onShare, onDelete, onRefresh }) => {
+    onRefresh: () => void;
+    onRequestJoin?: (p: Project) => void;
+}> = ({ project, user, onBack, onUpdateUser, onEdit, onShare, onDelete, onRefresh, onRequestJoin }) => {
     const [owner, setOwner] = useState<User | null>(null);
     const [comment, setComment] = useState('');
     const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
@@ -454,6 +540,8 @@ const ProjectDetail: React.FC<{
     const isSaved = user.savedProjectIds?.includes(project.id);
     const [isSaving, setIsSaving] = useState(false);
 
+    const hasRequested = project.joinRequests?.includes(user.id);
+
     useEffect(() => {
         const loadDetails = async () => {
             const o = await api.users.getById(project.ownerId);
@@ -461,28 +549,31 @@ const ProjectDetail: React.FC<{
             const c = await api.comments.getByParent(project.id);
             setComments(c);
             
-            // Resolve commenter names
             const map: Record<string, string> = {};
+            // Fetch commenter names
             for(const com of c) {
                 if(!map[com.authorId]) {
                     const u = await api.users.getById(com.authorId);
                     if(u) map[com.authorId] = u.name;
                 }
             }
-            // Resolve Collaborator names
+            // Fetch collaborator names
             for(const col of project.collaborators) {
                  if(!map[col.userId]) {
                      const u = await api.users.getById(col.userId);
                      if(u) map[col.userId] = u.name;
                  }
             }
+            // Ensure current user is in map
+            if (!map[user.id]) map[user.id] = user.name;
+            
             setUsersMap(map);
         };
         loadDetails();
-    }, [project]);
+    }, [project, user.id, user.name]);
 
     const handlePostComment = async () => {
-        if(!comment) return;
+        if(!comment.trim()) return;
         const newC = await api.comments.add({
             id: `c${Date.now()}`,
             parentId: project.id,
@@ -494,12 +585,39 @@ const ProjectDetail: React.FC<{
         setComment('');
     };
 
+    const handleReply = async (replyToId: string, text: string) => {
+        const newC = await api.comments.add({
+            id: `c${Date.now()}`,
+            parentId: project.id,
+            authorId: user.id,
+            text: text,
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId
+        });
+        setComments([...comments, newC]);
+    }
+
+    const handleDeleteComment = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this comment?")) return;
+        
+        // Optimistic UI update
+        const prevComments = comments;
+        setComments(comments.filter(c => c.id !== id));
+
+        try {
+            await api.comments.delete(id);
+        } catch (e) {
+            console.error("Failed to delete comment", e);
+            setComments(prevComments); // Revert
+            alert("Failed to delete comment");
+        }
+    };
+
     const handleInvite = async () => {
         if (!newCollaboratorEmail) return;
         setInviteStatus('loading');
-
+        
         try {
-            // 1. Find the user by email
             const allUsers = await api.users.getAll();
             const foundUser = allUsers.find(u => u.email.toLowerCase() === newCollaboratorEmail.toLowerCase());
 
@@ -515,7 +633,6 @@ const ProjectDetail: React.FC<{
                 return;
             }
 
-            // 2. Add to project
             const updatedProject = {
                 ...project,
                 collaborators: [
@@ -525,26 +642,9 @@ const ProjectDetail: React.FC<{
             };
 
             await api.projects.update(updatedProject);
-
-            // 3. Create notification for invited user
-            await api.notifications.create({
-                id: `n${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                recipientId: foundUser.id,
-                title: 'Project Invitation',
-                message: `${user.name} invited you to collaborate on "${project.title}"`,
-                isRead: false,
-                createdAt: new Date().toISOString(),
-                type: NotificationType.PROJECT_INVITE,
-                senderId: user.id,
-                senderName: user.name,
-                relatedId: project.id
-            });
-
             setInviteStatus('success');
             setInviteMsg('Collaborator added!');
             setNewCollaboratorEmail('');
-
-            // 4. Refresh Parent View to show updated list immediately
             onRefresh();
 
         } catch (e) {
@@ -572,6 +672,9 @@ const ProjectDetail: React.FC<{
             onDelete(project);
         }
     };
+
+    // Filter only root comments to start rendering tree
+    const rootComments = comments.filter(c => !c.replyToId);
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[600px] flex flex-col lg:flex-row">
@@ -664,27 +767,12 @@ const ProjectDetail: React.FC<{
 
                 <div className="pt-8 border-t border-gray-100">
                     <h3 className="font-bold text-lg mb-4">Project Forum</h3>
-                    <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
-                        {comments.length === 0 && <p className="text-gray-400 text-sm">No comments yet. Start the discussion!</p>}
-                        {comments.map(c => {
-                             const name = usersMap[c.authorId] || (c.authorId === user.id ? user.name : 'Unknown');
-                             return (
-                                <div key={c.id} className="flex space-x-3">
-                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
-                                        {name.charAt(0)}
-                                    </div>
-                                    <div className="bg-gray-50 p-3 rounded-lg rounded-tl-none">
-                                        <div className="text-xs font-bold text-gray-700">{name}</div>
-                                        <p className="text-sm text-gray-600">{c.text}</p>
-                                    </div>
-                                </div>
-                             )
-                        })}
-                    </div>
-                    <div className="flex space-x-2">
+                    
+                    {/* Comment Form (Top Level) */}
+                    <div className="flex space-x-2 mb-6">
                         <input 
                             type="text"
-                            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Write a comment..."
                             value={comment}
                             onChange={e => setComment(e.target.value)}
@@ -692,6 +780,22 @@ const ProjectDetail: React.FC<{
                         <button onClick={handlePostComment} className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                             <Send className="w-4 h-4" />
                         </button>
+                    </div>
+
+                    <div className="space-y-4 mb-6 max-h-[500px] overflow-y-auto">
+                        {comments.length === 0 && <p className="text-gray-400 text-sm">No comments yet. Start the discussion!</p>}
+                        {rootComments.map(c => (
+                             <CommentItem 
+                                key={c.id} 
+                                comment={c} 
+                                allComments={comments}
+                                usersMap={usersMap}
+                                currentUserId={user.id}
+                                isProjectOwner={isOwner}
+                                onReply={handleReply}
+                                onDelete={handleDeleteComment}
+                             />
+                        ))}
                     </div>
                 </div>
             </div>
@@ -767,9 +871,18 @@ const ProjectDetail: React.FC<{
                         </div>
                     )}
 
-                    {!isOwner && project.collaborators.every(c => c.userId !== user.id) && (
-                         <button className="mt-6 w-full py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">
-                            Request to Join
+                    {!isOwner && !isCollaborator && (
+                         <button 
+                            onClick={() => onRequestJoin && onRequestJoin(project)}
+                            disabled={hasRequested}
+                            className={`mt-6 w-full py-2 rounded-md text-sm font-medium transition flex justify-center items-center ${
+                                hasRequested 
+                                ? 'bg-green-50 text-green-600 border border-green-200 cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                         >
+                            {hasRequested ? <CheckCircle className="w-4 h-4 mr-2" /> : null}
+                            {hasRequested ? 'Request Sent' : 'Request to Join'}
                          </button>
                     )}
                 </div>
@@ -787,6 +900,7 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject,
   const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject || null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sharingProject, setSharingProject] = useState<Project | null>(null);
+  const [selectedArea, setSelectedArea] = useState('All Areas');
   
   // Data State
   const [projects, setProjects] = useState<Project[]>([]);
@@ -943,6 +1057,29 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject,
       }
   }
 
+  const handleRequestJoin = async (project: Project) => {
+      if (project.joinRequests?.includes(user.id)) return;
+      
+      const updatedProject = { 
+          ...project, 
+          joinRequests: [...(project.joinRequests || []), user.id] 
+      };
+      
+      setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p));
+
+      if (selectedProject?.id === project.id) {
+         setSelectedProject(updatedProject);
+      }
+
+      try {
+          await api.projects.update(updatedProject);
+      } catch (e) {
+          console.error(e);
+          alert("Failed to send request.");
+          fetchProjects(); 
+      }
+  }
+
   return (
     <div>
       {/* Share Modal */}
@@ -992,7 +1129,7 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject,
                         {subTab === 'joined' && myJoinedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} showActions />)}
                         
                         {subTab === 'saved' && mySavedProjects.length === 0 && <p className="text-gray-500">You haven't saved any projects yet.</p>}
-                        {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} showActions />)}
+                        {subTab === 'saved' && mySavedProjects.map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onDelete={handleDeleteProject} onRequestJoin={handleRequestJoin} showActions />)}
                     </div>
                 </div>
             )}
@@ -1026,15 +1163,22 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject,
                             />
                             <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
                         </div>
-                        <select className="border border-gray-300 rounded-md px-3 text-sm">
+                        <select 
+                            className="border border-gray-300 rounded-md px-3 text-sm"
+                            value={selectedArea}
+                            onChange={(e) => setSelectedArea(e.target.value)}
+                        >
                             <option>All Areas</option>
                             {THEMATIC_AREAS.map(a => <option key={a}>{a}</option>)}
                         </select>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {portfolioProjects
-                            .filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} showActions />)
+                            .filter(p => 
+                                p.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
+                                (selectedArea === 'All Areas' || p.thematicArea === selectedArea)
+                            )
+                            .map(p => <ProjectCard key={p.id} project={p} user={user} onSelect={handleSelectProject} onEdit={handleEditProject} onShare={handleShareProject} onRequestJoin={handleRequestJoin} onDelete={handleDeleteProject} showActions />)
                         }
                     </div>
                 </div>
@@ -1050,6 +1194,7 @@ const ProjectDashboard: React.FC<Props> = ({ user, onUpdateUser, initialProject,
                     onShare={handleShareProject}
                     onDelete={handleDeleteProject}
                     onRefresh={fetchProjects}
+                    onRequestJoin={handleRequestJoin}
                 />
             )}
           </>
