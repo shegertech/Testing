@@ -302,6 +302,10 @@ export const mockApi = {
           return [];
       },
       create: async (n: any) => { return n; },
-      markAsRead: async (id: string) => {}
+      markAsRead: async (id: string) => {},
+      listenToUserNotifications: (userId: string, callback: (notifications: any[]) => void) => {
+          callback([]);
+          return () => {};
+      }
   }
 };

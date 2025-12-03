@@ -264,17 +264,14 @@ export const firebaseApi = {
   notifications: {
       getByUser: async (userId: string) => {
           if (!db) return [];
-          // Changed: Removed .orderBy('createdAt', 'desc') to avoid needing a composite index in Firestore.
-          // Sorting is now done client-side.
           const snapshot = await db.collection('notifications')
               .where('recipientId', '==', userId)
               .get();
-          
+
           const list = snapshot.docs.map(d => d.data() as AppNotification);
-          // Client-side sort descending
           list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          
-          return list.slice(0, 20); // Limit to 20 after sort
+
+          return list.slice(0, 20);
       },
       create: async (n: AppNotification) => {
           if (!db) return n;
@@ -284,6 +281,25 @@ export const firebaseApi = {
       markAsRead: async (id: string) => {
           if (!db) return;
           await db.collection('notifications').doc(id).update({ isRead: true });
+      },
+      listenToUserNotifications: (userId: string, callback: (notifications: AppNotification[]) => void) => {
+          if (!db) {
+              callback([]);
+              return () => {};
+          }
+
+          const unsubscribe = db.collection('notifications')
+              .where('recipientId', '==', userId)
+              .onSnapshot((snapshot) => {
+                  const list = snapshot.docs.map(d => d.data() as AppNotification);
+                  list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  callback(list.slice(0, 20));
+              }, (error) => {
+                  console.error('Notification listener error:', error);
+                  callback([]);
+              });
+
+          return unsubscribe;
       }
   }
 };

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment } from '../types';
+import { User, Project, ProjectStatus, CollaboratorRole, Comment, Attachment, NotificationType } from '../types';
 import { THEMATIC_AREAS, COUNTRIES } from '../constants';
 import { 
   Search, Upload, X, FileText, Image as ImageIcon, Users, Download, Send, 
@@ -123,25 +123,51 @@ const ShareModal: React.FC<{ project: Project; onClose: () => void }> = ({ proje
   );
 };
 
-const ProjectCard: React.FC<{ 
-  project: Project; 
+const ProjectCard: React.FC<{
+  project: Project;
   user: User;
-  onSelect: (p: Project) => void; 
+  onSelect: (p: Project) => void;
   onEdit: (p: Project) => void;
   onShare: (p: Project) => void;
   onDelete?: (p: Project) => void;
-  showActions?: boolean 
+  showActions?: boolean
 }> = ({ project, user, onSelect, onEdit, onShare, onDelete, showActions = false }) => {
   const isOwner = project.ownerId === user.id;
   const isCollaborator = project.collaborators.some(c => c.userId === user.id);
   // Allow Edit if Owner OR Collaborator
   const canEdit = isOwner || isCollaborator;
-  
+
   const showJoin = !isOwner && !isCollaborator;
 
-  const handleJoin = (e: React.MouseEvent) => {
+  const handleJoin = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    alert(`Request to join sent for project: ${project.title}`);
+    try {
+      // Add join request to project
+      const updatedProject = {
+        ...project,
+        joinRequests: [...(project.joinRequests || []), user.id]
+      };
+      await api.projects.update(updatedProject);
+
+      // Create notification for project owner
+      await api.notifications.create({
+        id: `n${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        recipientId: project.ownerId,
+        title: 'New Join Request',
+        message: `${user.name} requested to join your project "${project.title}"`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        type: NotificationType.JOIN_REQUEST,
+        senderId: user.id,
+        senderName: user.name,
+        relatedId: project.id
+      });
+
+      alert('Request sent successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to send join request. Please try again.');
+    }
   };
 
   const handleShareClick = (e: React.MouseEvent) => {
@@ -471,7 +497,7 @@ const ProjectDetail: React.FC<{
     const handleInvite = async () => {
         if (!newCollaboratorEmail) return;
         setInviteStatus('loading');
-        
+
         try {
             // 1. Find the user by email
             const allUsers = await api.users.getAll();
@@ -499,12 +525,26 @@ const ProjectDetail: React.FC<{
             };
 
             await api.projects.update(updatedProject);
-            
+
+            // 3. Create notification for invited user
+            await api.notifications.create({
+                id: `n${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                recipientId: foundUser.id,
+                title: 'Project Invitation',
+                message: `${user.name} invited you to collaborate on "${project.title}"`,
+                isRead: false,
+                createdAt: new Date().toISOString(),
+                type: NotificationType.PROJECT_INVITE,
+                senderId: user.id,
+                senderName: user.name,
+                relatedId: project.id
+            });
+
             setInviteStatus('success');
             setInviteMsg('Collaborator added!');
             setNewCollaboratorEmail('');
-            
-            // 3. Refresh Parent View to show updated list immediately
+
+            // 4. Refresh Parent View to show updated list immediately
             onRefresh();
 
         } catch (e) {

@@ -24,9 +24,19 @@ const NotificationDropdown: React.FC<Props> = ({ user }) => {
   };
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
-    return () => clearInterval(interval);
+    // Use real-time listener if available, otherwise fall back to polling
+    if (api.notifications.listenToUserNotifications) {
+      const unsubscribe = api.notifications.listenToUserNotifications(user.id, (list) => {
+        setNotifications(list);
+        setUnreadCount(list.filter(n => !n.isRead).length);
+      });
+      return unsubscribe;
+    } else {
+      // Fallback to polling for mock mode
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
   }, [user]);
 
   useEffect(() => {
